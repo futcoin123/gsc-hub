@@ -22,6 +22,8 @@ export function isPublicPath(path: string): boolean {
     path === '/c.js' ||
     // Настройки счётчика для Worker сайта: только с ключом счётчика.
     path === '/c/site' ||
+    // Открытый ключ для шифрования «Карты ключей FUT» (scripts/key-map.mjs).
+    path === '/key-map/public-key' ||
     // Политика конфиденциальности: Google требует открытую ссылку на неё.
     path === '/privacy' ||
     // Клиенты MCP (claude.ai) ищут здесь настройки OAuth; пусть получат 404,

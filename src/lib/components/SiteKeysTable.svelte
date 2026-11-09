@@ -11,6 +11,7 @@
   import PositionChart from './PositionChart.svelte';
   import { TableSort } from '$lib/table-sort.svelte';
   import { classifyIntent } from '$lib/utils/intent';
+  import { keyMarker, markTitle, missingKeys, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
   import { Volumes } from '$lib/volumes.svelte';
   import { otherGroups, gi, activeGroup, itemKey, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
 
@@ -23,6 +24,11 @@
   const pathOf = (page: string) => { try { return new URL(page).pathname; } catch { return page; } };
   const checkoutOf = (r: Row) => checkouts[pathOf(r.page)] ?? 0;
   const checkoutTotal = $derived(Object.values(checkouts).reduce((a, b) => a + b, 0));
+  // «Карта ключей FUT»: главные и второстепенные ключи сайта; null — сайта в карте нет.
+  let keyMap = $state<MapPage[] | null>(null);
+  let onlyMap = $state(false);
+  const marker = $derived(keyMap ? keyMarker(keyMap) : null);
+  const markOf = (r: Row) => marker?.(r.query) ?? null;
 
   // Графики по дням: сайт целиком и отдельный ключ (ключ + страница).
   type Pt = { date: string; clicks: number; impressions: number; position: number | null };
@@ -57,6 +63,7 @@
     }
   }
   let loading = $state(true);
+  const notFound = $derived(keyMap && !loading ? missingKeys(keyMap, rows.map((r) => r.query)) : []);
   let err = $state<string | null>(null);
   let other = $state<Record<string, { owners: OtherOwner[]; links: OtherLink[] }>>({});
   let otherLoading = $state(false);
@@ -77,6 +84,7 @@
       const j = await r.json();
       rows = j.rows ?? [];
       checkouts = j.checkouts ?? {};
+      keyMap = j.keyMap ?? null;
     } catch (e) {
       err = (e as Error).message;
       return;
@@ -98,12 +106,13 @@
   });
 
   const intentOf = (r: Row) => classifyIntent(r.query, r.page);
-  type K = 'query' | 'intent' | 'page' | 'position' | 'impressions' | 'volume' | 'clicks' | 'ctr' | 'checkout' | 'others' | 'last' | 'group';
+  type K = 'query' | 'map' | 'intent' | 'page' | 'position' | 'impressions' | 'volume' | 'clicks' | 'ctr' | 'checkout' | 'others' | 'last' | 'group';
   const sort = new TableSort<K>('impressions', -1, ['impressions', 'volume', 'clicks', 'ctr', 'checkout', 'others', 'last', 'group']);
   const filtered = $derived.by(() => {
     const s = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (s && !r.query.toLowerCase().includes(s) && !r.page.toLowerCase().includes(s)) return false;
+      if (onlyMap && !markOf(r)) return false;
       if (kind === 'all') return true;
       const t = intentOf(r);
       return kind === 'any' ? t !== null : t === kind;
@@ -112,6 +121,7 @@
   const shown = $derived(
     sort.apply(filtered, (r, k) => {
       if (k === 'intent') return ((t) => (t === 'conv' ? 1 : t === 'brand' ? 2 : null))(intentOf(r));
+      if (k === 'map') return ((m) => (m ? (m.role === 'main' ? 1 : 2) : null))(markOf(r));
       if (k === 'volume') return vols.sortValue(r.query);
       if (k === 'checkout') return checkoutOf(r) || null;
       if (k === 'others') {
@@ -164,6 +174,7 @@
         <button type="button" class:is-active={kind === v} onclick={() => (kind = v as typeof kind)}>{label}</button>
       {/each}
     </div>
+    {#if keyMap}<label class="flex items-center gap-1 text-ink-2" title="Только ключи, которые есть в «Карте ключей FUT» у этого сайта (и их варианты)"><input type="checkbox" bind:checked={onlyMap} /> только из карты ключей</label>{/if}
     {#if !loading && !err}
       <span class="text-ink-3">{fmt(filtered.length)} строк · {fmt(totals.impressions)} показов · {fmt(totals.clicks)} кликов · перешли к оплате на сайте {fmt(checkoutTotal)}</span>
       {#if hidden}<span class="rounded bg-warn-t px-1.5 py-0.5 text-ink-2" title="Google скрывает редкие запросы (их ищут единицы людей) ради приватности. Их клики и показы входят в итог сайта, но ключей не видно — так же и в самой Search Console.">Скрыто Google: {fmt(hidden.clicks)} кликов · {fmt(hidden.impressions)} показов</span>{/if}
@@ -172,6 +183,20 @@
       {#if pickedQs.length}<button type="button" class="btn btn-ghost btn-sm" onclick={() => (picked = new Set())}>Снять отметки</button>{/if}
     {/if}
   </div>
+  {#if !loading && !err}
+    {#if keyMap}
+      {@const main = keyMap.filter((p) => p.role === 'main')}
+      <p class="mb-1 text-xs text-ink-2">
+        Карта ключей FUT: главный {#each main as p, i (p.country + p.url)}{i ? ', ' : ''}<span class="badge badge-ok" title="{p.url} ({p.country})">{p.key}</span>{/each}{#if !main.length}—{/if}
+        · второстепенных {keyMap.length - main.length}
+        {#if notFound.length}
+          · <span class="text-warn" title="Ни одного показа в Google за период по этим ключам карты (и их вариантам)">нет в Google за период: {notFound.map((p) => `${p.key}${p.role === 'main' ? ' (главный)' : ''}`).join(', ')}</span>
+        {/if}
+      </p>
+    {:else}
+      <p class="mb-1 text-xs text-ink-4">Сайта пока нет в «Карте ключей FUT» — пометок «главный» и «второстепенный» нет. Хаб ищет его в карте раз в 3 дня.</p>
+    {/if}
+  {/if}
   {#if vols.error}<p class="mb-1 text-xs text-bad">{vols.error}{#if !vols.configured} — <a class="text-acc underline" href="/settings/integrations">раздел «Сервисы»</a>{/if}</p>{/if}
   {#if vols.note}<p class="mb-1 text-xs text-emerald-700">{vols.note}</p>{/if}
 
@@ -205,6 +230,7 @@
           <tr>
             <th class="w-8"><input type="checkbox" checked={allPicked} aria-label="Отметить все ключи" onchange={() => (picked = allPicked ? new Set() : new Set(visibleQs))} /></th>
             <SortTh {sort} k="query" label="Ключ" />
+            <SortTh {sort} k="map" label="Карта" title="Главный или второстепенный ключ сайта по «Карте ключей FUT» (вместе с вариантами — Google считает их одним запросом)" />
             <SortTh {sort} k="intent" label="Тип" />
             <SortTh {sort} k="page" label="Страница" />
             <SortTh {sort} k="position" label="Pos" num />
@@ -220,6 +246,7 @@
         </thead>
         <tbody>
           {#each shown.slice(0, limit) as r (r.page + '\n' + r.query)}
+            {@const mk = markOf(r)}
             <tr class:is-selected={picked.has(r.query)}>
               <td><input type="checkbox" checked={picked.has(r.query)} aria-label="Отметить ключ {r.query}" onchange={() => pickToggle(r.query)} /></td>
               <td class="pii font-medium">
@@ -228,6 +255,7 @@
                   {#if multiDay}<button type="button" class="btn btn-ghost btn-sm h-5 px-1 {kwOpen === r.page + '\n' + r.query ? 'text-acc' : 'text-ink-4'}" title="Позиция этого ключа по дням" aria-label="График позиции ключа {r.query}" onclick={() => toggleKw(r)}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12l4-4 3 3 5-6"/></svg></button>{/if}
                 </span>
               </td>
+              <td>{#if mk}<span class="badge {mk.role === 'main' ? 'badge-ok' : 'badge-muted'} whitespace-nowrap" title={markTitle(mk)}>{ROLE_LABEL[mk.role]}{mk.same ? '' : ' ≈'}</span>{/if}</td>
               <td><IntentBadge query={r.query} page={r.page} /></td>
               <td class="min-w-[14rem] max-w-sm"><a class="pii break-all text-ink-3 hover:text-acc hover:underline" href={r.page} target="_blank" rel="noopener noreferrer">{r.page}</a></td>
               <td class="num app-num">{r.position.toFixed(1)}</td>
@@ -244,7 +272,7 @@
               {@const c = kwCharts[kwOpen]}
               <tr class="bg-sunk hover:bg-sunk">
                 <td></td>
-                <td colspan="12" class="py-2">
+                <td colspan="13" class="py-2">
                   <div class="mb-1 text-xs font-semibold text-ink-2">«{r.query}» на {pathOf(r.page)} — по дням</div>
                   {#if !c || c.loading}<p class="loading text-xs">Загружаю график…</p>
                   {:else if c.err}<p class="text-xs text-bad">График не загрузился: {c.err}</p>

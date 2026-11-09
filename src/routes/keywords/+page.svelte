@@ -7,8 +7,10 @@
   import SortTh from '$lib/components/SortTh.svelte';
   import SiteKeysTable from '$lib/components/SiteKeysTable.svelte';
   import GroupBar from '$lib/components/GroupBar.svelte';
+  import SiteGroupBar from '$lib/components/SiteGroupBar.svelte';
+  import SiteGroupCell from '$lib/components/SiteGroupCell.svelte';
   import { TableSort } from '$lib/table-sort.svelte';
-  import { loadGroupItems } from '$lib/group-items.svelte';
+  import { loadGroupItems, siteInTarget } from '$lib/group-items.svelte';
   import { siteHref } from '$lib/utils/site';
 
   let { data } = $props();
@@ -26,12 +28,18 @@
   }
   const display = (u: string) => u.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-  type K = 'site' | 'account' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay';
-  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay']);
+  type K = 'site' | 'account' | 'map' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay' | 'group';
+  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay', 'group']);
   const sites = $derived(
     sort.apply(
       data.sites.filter((s) => (!search.trim() || s.siteUrl.toLowerCase().includes(search.trim().toLowerCase())) && (!hideEmpty || s.impressions > 0)),
-      (s, k) => (k === 'site' ? display(s.siteUrl) : k === 'account' ? (s.accountLabel ?? s.accountEmail) : k === 'pay' ? (data.pay[s.siteUrl] ?? 0) : s[k])
+      (s, k) =>
+        k === 'site' ? display(s.siteUrl)
+        : k === 'account' ? (s.accountLabel ?? s.accountEmail)
+        : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0] ?? null)
+        : k === 'pay' ? (data.pay[s.siteUrl] ?? 0)
+        : k === 'group' ? (siteInTarget(s.siteUrl) ? 1 : 0)
+        : s[k]
     )
   );
   const total = $derived(data.sites.reduce((a, s) => ({ i: a.i + s.impressions, c: a.c + s.clicks }), { i: 0, c: 0 }));
@@ -56,6 +64,7 @@
       <span class="text-ink-3">{fmt(data.sites.length)} сайтов · {fmt(total.i)} показов · {fmt(total.c)} кликов · перешли к оплате {fmt(data.payTotal)}</span>
       <span class="text-ink-4">Сайты консолей, отмеченных галочкой «Использовать» на странице Accounts.</span>
     </div>
+    <SiteGroupBar />
     <div class="px-3 py-2"><GroupBar /></div>
     {#if data.errors.length}
       <div class="app-errors mx-3">{#each data.errors as e (e.account)}<div>{e.account}: {e.reason}</div>{/each}</div>
@@ -70,17 +79,20 @@
             <tr>
               <SortTh {sort} k="site" label="Сайт" />
               <SortTh {sort} k="account" label="Консоль" />
+              <SortTh {sort} k="map" label="Карта ключей" title="Главный ключ сайта и сколько второстепенных — из «Карты ключей FUT». Сайт берётся из карты один раз и потом не меняется; сайты, которых в карте ещё нет, хаб ищет в ней раз в 3 дня" />
               <SortTh {sort} k="impressions" label="Impr" num />
               <SortTh {sort} k="clicks" label="Clicks" num />
               <SortTh {sort} k="ctr" label="CTR" num />
               <SortTh {sort} k="position" label="Avg Pos" num />
               <SortTh {sort} k="pay" label="Перешли к оплате" num title="Нажатия кнопки оплаты — переходы на партнёрку за тот же период, по счётчику хаба на сайте" />
+              <SortTh {sort} k="group" label="В группу" title="Кнопка + добавляет сайт в группу, выбранную над таблицей («Сайты в группу»)" />
               <th></th>
             </tr>
           </thead>
           <tbody>
             {#each sites as s (key(s))}
               {@const k = key(s)}
+              {@const km = data.keyMap[s.siteUrl]}
               <tr class="cursor-pointer" class:is-selected={open.has(k)} onclick={() => toggle(k)}>
                 <td class="pii font-semibold text-ink">
                   <span class="flex items-center gap-1">
@@ -90,6 +102,16 @@
                   </span>
                 </td>
                 <td class="pii text-xs text-ink-3">{s.accountLabel ?? s.accountEmail}</td>
+                <td class="max-w-[16rem] text-xs">
+                  {#if km}
+                    <span class="flex flex-wrap items-center gap-1" title="«Карта ключей FUT»: главный ключ — {km.main.join(', ') || 'нет'}; второстепенных — {km.secondary}">
+                      {#each km.main as k (k)}<span class="badge badge-ok">{k}</span>{/each}
+                      {#if km.secondary}<span class="text-ink-3">+{km.secondary} второстеп.</span>{/if}
+                    </span>
+                  {:else}
+                    <span class="text-ink-4" title="Сайта пока нет в «Карте ключей FUT». Хаб ищет его в карте раз в 3 дня — когда появится, ключи отметятся сами">нет в карте</span>
+                  {/if}
+                </td>
                 {#if s.error}
                   <td colspan="4" class="text-xs text-bad" title={s.error}>не загрузилось</td>
                 {:else}
@@ -99,13 +121,14 @@
                   <td class="num app-num">{s.position === null ? '—' : s.position.toFixed(1)}</td>
                 {/if}
                 <td class="num app-num {data.pay[s.siteUrl] ? 'font-semibold' : 'text-ink-4'}">{fmt(data.pay[s.siteUrl] ?? 0)}</td>
+                <td><SiteGroupCell siteUrl={s.siteUrl} /></td>
                 <td class="text-right">
                   <a class="btn btn-ghost btn-sm" href="/properties/{encodeURIComponent(s.siteUrl)}?acc={encodeURIComponent(s.accountId)}" onclick={(e) => e.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">Подробно</a>
                 </td>
               </tr>
               {#if open.has(k)}
                 <tr class="bg-sunk hover:bg-sunk">
-                  <td colspan="8" class="px-3">
+                  <td colspan="10" class="px-3">
                     {#key data.period.key}
                       <SiteKeysTable siteUrl={s.siteUrl} accountId={s.accountId} period={data.period.key} siteTotals={s.error ? null : { clicks: s.clicks, impressions: s.impressions }} />
                     {/key}

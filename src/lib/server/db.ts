@@ -295,6 +295,23 @@ CREATE TABLE IF NOT EXISTS checkout_sources (
   PRIMARY KEY (day, host, source)
 );
 
+-- «Карта ключей FUT»: главные и второстепенные ключи сайтов. Сайт берётся из
+-- карты один раз и потом не меняется (правило владелицы 09.11.2026).
+CREATE TABLE IF NOT EXISTS key_map_hosts (
+  host     TEXT PRIMARY KEY,
+  pages    TEXT NOT NULL,
+  added_at INTEGER NOT NULL
+);
+-- Ключ, которым зашифрована карта в открытом репозитории, и что уже взято.
+CREATE TABLE IF NOT EXISTS key_map_state (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  private_key TEXT NOT NULL,
+  public_key  TEXT NOT NULL,
+  map_hash    TEXT,
+  map_updated TEXT,
+  imported_at INTEGER
+);
+
 -- Даты доменов: из реестра (RDAP) и вписанные вручную (важнее реестра).
 CREATE TABLE IF NOT EXISTS domain_dates (
   host              TEXT PRIMARY KEY,
