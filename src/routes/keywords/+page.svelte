@@ -26,12 +26,12 @@
   }
   const display = (u: string) => u.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-  type K = 'site' | 'account' | 'impressions' | 'clicks' | 'ctr' | 'position';
-  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr']);
+  type K = 'site' | 'account' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay';
+  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay']);
   const sites = $derived(
     sort.apply(
       data.sites.filter((s) => (!search.trim() || s.siteUrl.toLowerCase().includes(search.trim().toLowerCase())) && (!hideEmpty || s.impressions > 0)),
-      (s, k) => (k === 'site' ? display(s.siteUrl) : k === 'account' ? (s.accountLabel ?? s.accountEmail) : s[k])
+      (s, k) => (k === 'site' ? display(s.siteUrl) : k === 'account' ? (s.accountLabel ?? s.accountEmail) : k === 'pay' ? (data.pay[s.siteUrl] ?? 0) : s[k])
     )
   );
   const total = $derived(data.sites.reduce((a, s) => ({ i: a.i + s.impressions, c: a.c + s.clicks }), { i: 0, c: 0 }));
@@ -53,7 +53,7 @@
     <div class="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2 text-xs">
       <input class="input h-7 w-56 text-xs" placeholder="Сайт содержит…" bind:value={search} aria-label="Поиск сайта" />
       <label class="flex items-center gap-1 text-ink-2"><input type="checkbox" bind:checked={hideEmpty} /> скрыть сайты без показов</label>
-      <span class="text-ink-3">{fmt(data.sites.length)} сайтов · {fmt(total.i)} показов · {fmt(total.c)} кликов</span>
+      <span class="text-ink-3">{fmt(data.sites.length)} сайтов · {fmt(total.i)} показов · {fmt(total.c)} кликов · перешли к оплате {fmt(data.payTotal)}</span>
       <span class="text-ink-4">Сайты консолей, отмеченных галочкой «Использовать» на странице Accounts.</span>
     </div>
     <div class="px-3 py-2"><GroupBar /></div>
@@ -74,6 +74,7 @@
               <SortTh {sort} k="clicks" label="Clicks" num />
               <SortTh {sort} k="ctr" label="CTR" num />
               <SortTh {sort} k="position" label="Avg Pos" num />
+              <SortTh {sort} k="pay" label="Перешли к оплате" num title="Нажатия кнопки оплаты — переходы на партнёрку за тот же период, по счётчику хаба на сайте" />
               <th></th>
             </tr>
           </thead>
@@ -97,13 +98,14 @@
                   <td class="num app-num">{(s.ctr * 100).toFixed(1)}%</td>
                   <td class="num app-num">{s.position === null ? '—' : s.position.toFixed(1)}</td>
                 {/if}
+                <td class="num app-num {data.pay[s.siteUrl] ? 'font-semibold' : 'text-ink-4'}">{fmt(data.pay[s.siteUrl] ?? 0)}</td>
                 <td class="text-right">
                   <a class="btn btn-ghost btn-sm" href="/properties/{encodeURIComponent(s.siteUrl)}?acc={encodeURIComponent(s.accountId)}" onclick={(e) => e.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">Подробно</a>
                 </td>
               </tr>
               {#if open.has(k)}
                 <tr class="bg-sunk hover:bg-sunk">
-                  <td colspan="7" class="px-3">
+                  <td colspan="8" class="px-3">
                     {#key data.period.key}
                       <SiteKeysTable siteUrl={s.siteUrl} accountId={s.accountId} period={data.period.key} siteTotals={s.error ? null : { clicks: s.clicks, impressions: s.impressions }} />
                     {/key}
