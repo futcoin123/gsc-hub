@@ -12,6 +12,7 @@
   import { TableSort } from '$lib/table-sort.svelte';
   import { classifyIntent } from '$lib/utils/intent';
   import { keyMarker, markTitle, missingKeys, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
+  import { checkoutLeads, checkoutSplit } from '$lib/utils/checkout-lead';
   import { Volumes } from '$lib/volumes.svelte';
   import { otherGroups, gi, activeGroup, itemKey, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
 
@@ -22,8 +23,14 @@
   // Переходы к оплате по страницам сайта за период (счётчик хаба): путь → сколько.
   let checkouts = $state<Record<string, number>>({});
   const pathOf = (page: string) => { try { return new URL(page).pathname; } catch { return page; } };
-  const checkoutOf = (r: Row) => checkouts[pathOf(r.page)] ?? 0;
+  // По какому ключу пришёл посетитель, неизвестно: переходы страницы стоят у
+  // одного её ключа (с наибольшими кликами), а не у каждого.
+  const leads = $derived(checkoutLeads(rows, pathOf));
+  const isLead = (r: Row) => leads.get(pathOf(r.page)) === r.query;
+  const pageCheckouts = (r: Row) => checkouts[pathOf(r.page)] ?? 0;
+  const checkoutOf = (r: Row) => (isLead(r) ? pageCheckouts(r) : 0);
   const checkoutTotal = $derived(Object.values(checkouts).reduce((a, b) => a + b, 0));
+  const split = $derived(checkoutSplit(checkouts, new Set(leads.keys())));
   // «Карта ключей FUT»: главные и второстепенные ключи сайта; null — сайта в карте нет.
   let keyMap = $state<MapPage[] | null>(null);
   let onlyMap = $state(false);
@@ -176,7 +183,7 @@
     </div>
     {#if keyMap}<label class="flex items-center gap-1 text-ink-2" title="Только ключи, которые есть в «Карте ключей FUT» у этого сайта (и их варианты)"><input type="checkbox" bind:checked={onlyMap} /> только из карты ключей</label>{/if}
     {#if !loading && !err}
-      <span class="text-ink-3">{fmt(filtered.length)} строк · {fmt(totals.impressions)} показов · {fmt(totals.clicks)} кликов · перешли к оплате на сайте {fmt(checkoutTotal)}</span>
+      <span class="text-ink-3">{fmt(filtered.length)} строк · {fmt(totals.impressions)} показов · {fmt(totals.clicks)} кликов · перешли к оплате на сайте {fmt(checkoutTotal)}{#if checkoutTotal}<span title="Переходы к оплате со страниц, у которых есть ключи в этой таблице, и с остальных страниц сайта (оформление заказа, страницы без показов в Google)"> (на страницах с ключами {fmt(split.withKeys)}, на других {fmt(split.other)})</span>{/if}</span>
       {#if hidden}<span class="rounded bg-warn-t px-1.5 py-0.5 text-ink-2" title="Google скрывает редкие запросы (их ищут единицы людей) ради приватности. Их клики и показы входят в итог сайта, но ключей не видно — так же и в самой Search Console.">Скрыто Google: {fmt(hidden.clicks)} кликов · {fmt(hidden.impressions)} показов</span>{/if}
       <span class="flex-1"></span>
       <button type="button" class="btn btn-sec btn-sm" disabled={vols.checking || !filtered.length} title="Точная частотность от Google Ads по ключам в таблице (с учётом фильтра)" onclick={checkVolumes}>{vols.checking ? 'Проверяю…' : pickedQs.length ? `Частотность отмеченных в DataForSEO (${pickedQs.length})` : `Частотность в DataForSEO — все (${visibleQs.length})`}</button>
@@ -238,7 +245,7 @@
             <SortTh {sort} k="volume" label={vols.country ? `Частотность · ${vols.country.toUpperCase()}` : 'Частотность'} num />
             <SortTh {sort} k="clicks" label="Clicks" num />
             <SortTh {sort} k="ctr" label="CTR" num />
-            <SortTh {sort} k="checkout" label="Оплата" num title="Переходы к оплате (на партнёрку), сделанные на странице этого ключа за период — по счётчику хаба. По какому ключу пришёл посетитель, Google не сообщает, поэтому у ключей одной страницы число одно и то же" />
+            <SortTh {sort} k="checkout" label="Оплата" num title="Переходы к оплате (на партнёрку), сделанные на странице за период — по счётчику хаба. По какому ключу пришёл посетитель, Google не сообщает, поэтому число страницы стоит один раз — у её ключа с наибольшими кликами" />
             <SortTh {sort} k="others" label="Мои другие сайты" title="Другие ваши сайты той же страны по этому ключу и ссылки на них. Красным — стоит выше" />
             <SortTh {sort} k="last" label="Последняя закупка" />
             <SortTh {sort} k="group" label="В группу" num />
@@ -263,7 +270,7 @@
               <td class="num"><VolumeCell v={vols.byQuery[r.query]} loading={vols.loading} /></td>
               <td class="num app-num">{fmt(r.clicks)}</td>
               <td class="num app-num">{(r.ctr * 100).toFixed(1)}%</td>
-              <td class="num app-num">{#if checkoutOf(r)}<span class="badge badge-ok" title="Переходы к оплате на странице {pathOf(r.page)} за период">✓ {fmt(checkoutOf(r))}</span>{:else}<span class="text-ink-4">—</span>{/if}</td>
+              <td class="num app-num">{#if checkoutOf(r)}<span class="badge badge-ok" title="Переходы к оплате на странице {pathOf(r.page)} за период — всей страницы, не только по этому ключу">✓ {fmt(checkoutOf(r))}</span>{:else if pageCheckouts(r)}<span class="text-ink-4" title="Переходы к оплате на странице {pathOf(r.page)} ({fmt(pageCheckouts(r))}) показаны один раз — у ключа «{leads.get(pathOf(r.page))}»">—</span>{:else}<span class="text-ink-4">—</span>{/if}</td>
               <td class="min-w-[10rem]"><OtherSitesInline owners={other[r.query]?.owners ?? []} links={other[r.query]?.links ?? []} position={r.position} loading={otherLoading} query={r.query} /></td>
               <td><LastPlanCell page={r.page} query={r.query} /></td>
               <td class="num"><GroupCell row={{ siteUrl, query: r.query, page: r.page, position: r.position, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr }} /></td>
