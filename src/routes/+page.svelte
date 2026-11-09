@@ -1,8 +1,51 @@
 <script lang="ts">
   import type { PageData } from './$types';
+  import { onMount } from 'svelte';
   import { invalidateAll } from '$app/navigation';
   let { data }: { data: PageData } = $props();
   const isAdmin = $derived(data.user?.role === 'admin');
+
+  // Сайты консолей: сколько их, какие не подтверждены, что добавилось после «Обновить».
+  type SitesInfo = { total: number; unverified: string[]; added?: string[] } | { error: string };
+  let sites = $state<Record<string, SitesInfo>>({});
+  let sitesLoading = $state(false);
+  let refreshing = $state<string | null>(null);
+  let refreshNote = $state<string | null>(null);
+  async function loadSites() {
+    sitesLoading = true;
+    try {
+      const r = await fetch('/accounts/sites');
+      if (r.ok) sites = await r.json();
+    } catch {
+      // сеть — колонка останется пустой
+    } finally {
+      sitesLoading = false;
+    }
+  }
+  onMount(() => { if (isAdmin) loadSites(); });
+  /** id — одна консоль; null — все. */
+  async function refreshSites(id: string | null) {
+    refreshing = id ?? 'all';
+    refreshNote = null;
+    try {
+      const r = await fetch('/accounts/sites', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(id ? { id } : {})
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const fresh = (await r.json()) as Record<string, SitesInfo>;
+      sites = { ...sites, ...fresh };
+      const added = Object.values(fresh).flatMap((v) => ('added' in v && v.added ? v.added : []));
+      refreshNote = added.length ? `Новые сайты: ${added.map(short).join(', ')}` : 'Новых сайтов нет — список совпадает с Search Console.';
+      await invalidateAll();
+    } catch (e) {
+      refreshNote = `Не обновилось: ${(e as Error).message}`;
+    } finally {
+      refreshing = null;
+    }
+  }
+  const short = (u: string) => u.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
   let pending = $state<string | null>(null);
   async function setInUse(id: string, inUse: boolean) {
@@ -44,6 +87,7 @@
       {#if isAdmin}
         <a href="/properties" class="btn btn-sec">Sites</a>
         <a href="/dashboard" class="btn btn-sec">Dashboard</a>
+        <button type="button" class="btn btn-sec" disabled={refreshing !== null} title="Заново забрать список сайтов из Search Console у всех консолей — новые сайты появятся во всех отчётах сразу" onclick={() => refreshSites(null)}>{refreshing === 'all' ? 'Обновляю…' : 'Обновить сайты'}</button>
       {/if}
       <span class="app-toolbar-divider" aria-hidden="true"></span>
       <form method="POST" action="?/connect">
@@ -64,6 +108,7 @@
   {:else}
     <section class="pane">
       <div class="pane-head">Accounts <span class="aside app-num">{#if isAdmin}в отчётах {inUseCount} из&nbsp;{/if}{data.accounts.length}</span></div>
+      {#if refreshNote}<p class="border-b border-line px-3 py-2 text-xs {refreshNote.startsWith('Не ') ? 'text-bad' : 'text-ink-2'}" role="status">{refreshNote}</p>{/if}
       <div class="overflow-x-auto">
       <table class="app-table">
         <thead>
@@ -72,6 +117,7 @@
             <th>Email</th>
             {#if isAdmin}<th class="hidden sm:table-cell">Label</th>{/if}
             <th>Status</th>
+            {#if isAdmin}<th title="Сколько сайтов видно в Search Console этой консоли. Хаб помнит список час; «Обновить» забирает его заново">Сайтов</th>{/if}
             <th class="hidden md:table-cell">Added</th>
             {#if isAdmin}<th class="hidden lg:table-cell">Owner</th>{/if}
             {#if isAdmin}<th class="w-px text-right">Actions</th>{/if}
@@ -110,6 +156,25 @@
                   {a.status}
                 </span>
               </td>
+              {#if isAdmin}
+              {@const si = sites[a.id]}
+              <td class="whitespace-nowrap text-xs">
+                <span class="inline-flex items-center gap-2">
+                  {#if si && 'error' in si}
+                    <span class="text-bad" title={si.error}>не загрузилось</span>
+                  {:else if si}
+                    <span class="app-num font-medium text-ink">{si.total}</span>
+                    {#if si.unverified.length}<span class="badge badge-warn" title="Добавлены, но не подтверждены в Search Console — данных по ним Google не даст: {si.unverified.map(short).join(', ')}">{si.unverified.length} не подтв.</span>{/if}
+                    {#if si.added?.length}<span class="badge badge-ok" title={si.added.map(short).join(', ')}>+{si.added.length} новых</span>{/if}
+                  {:else if sitesLoading}
+                    <span class="text-ink-4">…</span>
+                  {/if}
+                  {#if a.status !== 'revoked'}
+                    <button type="button" class="btn btn-ghost btn-sm" disabled={refreshing !== null} title="Заново забрать сайты этой консоли из Search Console" onclick={() => refreshSites(a.id)}>{refreshing === a.id ? 'Обновляю…' : 'Обновить'}</button>
+                  {/if}
+                </span>
+              </td>
+              {/if}
               <td class="app-num hidden text-ink-3 md:table-cell">{fmtDate(a.added_at)}</td>
               {#if isAdmin}
               <td class="app-num hidden text-ink-3 lg:table-cell">{a.owner_id ?? '—'}</td>
