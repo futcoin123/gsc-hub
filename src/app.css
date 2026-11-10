@@ -323,6 +323,28 @@
   .app-table tbody tr.is-selected {
     @apply bg-acc-t/60;
   }
+  /* Просторная таблица для глаз (просьба владелицы 10.11.2026): строки выше,
+     шрифт крупнее, чёткие разделители и полосы через строку (класс is-alt
+     ставит страница — раскрытые строки не сбивают чередование). */
+  .app-table.is-roomy {
+    @apply text-[13.5px];
+  }
+  .app-table.is-roomy > tbody > tr > td {
+    @apply py-2.5;
+  }
+  .app-table.is-roomy > tbody > tr {
+    @apply border-line;
+  }
+  .app-table.is-roomy > tbody > tr.is-alt {
+    @apply bg-line-soft/70;
+  }
+  .app-table.is-roomy > tbody > tr:hover {
+    @apply bg-acc-t/50;
+  }
+  .app-table.is-roomy > tbody > tr.is-selected {
+    @apply bg-acc-t/70;
+  }
+
   /* Строка «Итого» над сайтами: свой цвет, чтобы не путать с сайтом. */
   .app-table tbody tr.is-total,
   .app-table tbody tr.is-total:hover {
