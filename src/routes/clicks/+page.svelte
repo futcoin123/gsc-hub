@@ -286,6 +286,23 @@
             </tr>
           </thead>
           <tbody>
+            <!-- Итого — первой строкой и своим цветом, чтобы не путать с сайтами -->
+            <tr class="is-total" title="Сумма по всем сайтам в таблице; среднее время и доли — по всем сайтам вместе">
+              <td class="whitespace-nowrap text-acc">Итого: {fmt(totals.n)} {sitesWord(totals.n)}</td>
+              <td class="num app-num">{fmt(totals.impr)}</td>
+              <td class="num app-num">{fmt(totals.gsc)}</td>
+              {#if showBing}
+                <td class="num app-num" title={bingCovers ? '' : bingWhy('')}>{bingCovers ? fmt(totals.bImpr) : '—'}</td>
+                <td class="num app-num" title={bingCovers ? '' : bingWhy('')}>{bingCovers ? fmt(totals.bClicks) : '—'}</td>
+              {/if}
+              <td class="num app-num">{fmt(totals.v)}</td>
+              {#each SRC_COLS as [c] (c)}<td class="num app-num" title={totals.withSrc < totals.n ? `Только сайты, чей счётчик передаёт источник: ${totals.withSrc} из ${totals.n}` : ''}>{totals.withSrc ? fmt(totals.src[c]) : '—'}</td>{/each}
+              <td class="num app-num">{dur(totals.v ? totals.sec / totals.v : null)}</td>
+              <td class="num app-num">{fmt(totals.b)}</td>
+              <td class="num app-num">{pct(totals.v ? totals.b / totals.v : null)}</td>
+              <td class="num app-num">{fmt(totals.s)}</td>
+              <td class="num app-num">{pct(totals.v ? totals.s / totals.v : null)}</td>
+            </tr>
             {#each sites as s (s.host)}
               <tr class="cursor-pointer" class:is-selected={open.has(s.host)} onclick={() => toggle(s.host)}>
                 <td class="pii font-semibold text-ink">
@@ -415,24 +432,6 @@
               {/if}
             {/each}
           </tbody>
-          <tfoot>
-            <tr class="border-t-2 border-line bg-sunk font-semibold text-ink" title="Сумма по всем сайтам в таблице; среднее время и доли — по всем сайтам вместе">
-              <td class="whitespace-nowrap">Итого: {fmt(totals.n)} {sitesWord(totals.n)}</td>
-              <td class="num app-num">{fmt(totals.impr)}</td>
-              <td class="num app-num">{fmt(totals.gsc)}</td>
-              {#if showBing}
-                <td class="num app-num" title={bingCovers ? '' : bingWhy('')}>{bingCovers ? fmt(totals.bImpr) : '—'}</td>
-                <td class="num app-num" title={bingCovers ? '' : bingWhy('')}>{bingCovers ? fmt(totals.bClicks) : '—'}</td>
-              {/if}
-              <td class="num app-num">{fmt(totals.v)}</td>
-              {#each SRC_COLS as [c] (c)}<td class="num app-num" title={totals.withSrc < totals.n ? `Только сайты, чей счётчик передаёт источник: ${totals.withSrc} из ${totals.n}` : ''}>{totals.withSrc ? fmt(totals.src[c]) : '—'}</td>{/each}
-              <td class="num app-num">{dur(totals.v ? totals.sec / totals.v : null)}</td>
-              <td class="num app-num">{fmt(totals.b)}</td>
-              <td class="num app-num">{pct(totals.v ? totals.b / totals.v : null)}</td>
-              <td class="num app-num">{fmt(totals.s)}</td>
-              <td class="num app-num">{pct(totals.v ? totals.s / totals.v : null)}</td>
-            </tr>
-          </tfoot>
         </table>
       </div>
     {/if}

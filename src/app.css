@@ -323,6 +323,11 @@
   .app-table tbody tr.is-selected {
     @apply bg-acc-t/60;
   }
+  /* Строка «Итого» над сайтами: свой цвет, чтобы не путать с сайтом. */
+  .app-table tbody tr.is-total,
+  .app-table tbody tr.is-total:hover {
+    @apply border-b-2 border-acc/40 bg-acc-t font-semibold text-ink;
+  }
   .app-table tbody tr.is-hidden-row {
     @apply opacity-50;
   }
