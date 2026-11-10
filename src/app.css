@@ -352,9 +352,15 @@
   }
 
   /* Строка «Итого» над сайтами: свой цвет, чтобы не путать с сайтом. */
-  .app-table tbody tr.is-total,
-  .app-table tbody tr.is-total:hover {
-    @apply border-b-2 border-acc/70 bg-acc/15 font-semibold text-ink;
+  .app-table tr.is-total,
+  .app-table tr.is-total:hover {
+    @apply bg-pane font-semibold text-ink;
+  }
+  /* Цвет — на ячейках: строка стоит в закреплённой шапке, а рамки таблицы при
+     прокрутке уезжают; тень-линия снизу остаётся на месте. */
+  .app-table tr.is-total > td {
+    @apply bg-acc/15 py-2.5;
+    box-shadow: inset 0 -2px 0 rgb(var(--acc) / 0.7);
   }
   .app-table tbody tr.is-hidden-row {
     @apply opacity-50;

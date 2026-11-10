@@ -267,9 +267,10 @@
     {#if sites.length === 0}
       <p class="p-3 text-ink-3">В выбранных консолях нет сайтов. Отметьте консоль в шапке («Консоли»).</p>
     {:else}
-      <div class="overflow-x-auto">
+      <!-- Своя прокрутка у таблицы: названия колонок и «Итого» остаются на виду. -->
+      <div class="max-h-[calc(100vh-3.5rem)] overflow-auto">
         <table class="app-table is-roomy">
-          <thead>
+          <thead class="sticky top-0 z-10">
             <tr>
               <SortTh {sort} k="host" label="Сайт" />
               <SortTh {sort} k="impr" label="Показы в Google" num title="Search Console за тот же период: сколько раз сайт показали в поиске" />
@@ -286,8 +287,6 @@
               <SortTh {sort} k="submits" label="Перешли к оплате" num title="Нажали кнопку заказа («Continue to checkout», «Afrekenen»…) и реально ушли на оплату / к партнёру. Если сайт не пустил (например, сумма мала) — не считается" />
               <SortTh {sort} k="rateSubmit" label="% от просмотров" num title="Перешли к оплате / просмотры страниц" />
             </tr>
-          </thead>
-          <tbody>
             <!-- Итого — первой строкой и своим цветом, чтобы не путать с сайтами -->
             <tr class="is-total" title="Сумма по всем сайтам в таблице; среднее время и доли — по всем сайтам вместе">
               <td class="whitespace-nowrap text-acc">Итого: {fmt(totals.n)} {sitesWord(totals.n)}</td>
@@ -305,6 +304,8 @@
               <td class="num app-num">{fmt(totals.s)}</td>
               <td class="num app-num">{pct(totals.v ? totals.s / totals.v : null)}</td>
             </tr>
+          </thead>
+          <tbody>
             {#each sites as s, i (s.host)}
               <tr class="is-site cursor-pointer" class:is-alt={i % 2 === 1} class:is-selected={open.has(s.host)} onclick={() => toggle(s.host)}>
                 <td class="pii font-semibold text-ink">
