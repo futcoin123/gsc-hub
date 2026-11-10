@@ -125,9 +125,11 @@
     return [...m.values()];
   });
   type K = 'host' | 'impr' | 'gsc' | 'bImpr' | 'bClicks' | 'views' | 'src_g' | 'src_b' | 'src_s' | 'src_ai' | 'src_d' | 'src_o' | 'avg' | 'buttons' | 'submits' | 'rateButton' | 'rateSubmit';
-  // По умолчанию — по кликам из Google, от больших к меньшим.
-  const sort = new TableSort<K>('gsc', -1, ['impr', 'gsc', 'bImpr', 'bClicks', 'views', 'src_g', 'src_b', 'src_s', 'src_ai', 'src_d', 'src_o', 'avg', 'buttons', 'submits', 'rateButton', 'rateSubmit']);
-  const sites = $derived(sort.apply(sitesRaw, (s, k) => (k.startsWith('src_') ? (s.src ? s.src[k.slice(4) as keyof Src6] : null) : s[k as Exclude<K, `src_${string}`>])));
+  // По умолчанию — по переходам к оплате, от больших к меньшим (просьба владелицы
+  // 10.11.2026); при равных переходах — по кликам из Google.
+  const sort = new TableSort<K>('submits', -1, ['impr', 'gsc', 'bImpr', 'bClicks', 'views', 'src_g', 'src_b', 'src_s', 'src_ai', 'src_d', 'src_o', 'avg', 'buttons', 'submits', 'rateButton', 'rateSubmit']);
+  const byGsc = $derived([...sitesRaw].sort((a, b) => (b.gsc ?? -1) - (a.gsc ?? -1)));
+  const sites = $derived(sort.apply(byGsc, (s, k) => (k.startsWith('src_') ? (s.src ? s.src[k.slice(4) as keyof Src6] : null) : s[k as Exclude<K, `src_${string}`>])));
 
   type DK = 'label' | 'kind' | 'page' | 'target' | 'n';
   const dsort = new TableSort<DK>('n', -1, ['n']);
