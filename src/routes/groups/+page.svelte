@@ -192,6 +192,20 @@
   });
   const arrow = (k: SortKey) => (tzSort === k ? (tzDir === 1 ? ' ↑' : ' ↓') : '');
 
+  // «Язык» и «Гео» страниц ТЗ — с самих сайтов, названиями как на бирже ссылок.
+  let tzLocale = $state<Record<string, { language: string | null; geo: string }>>({});
+  let tzLocaleKey = '';
+  $effect(() => {
+    const pages = [...new Set(data.items.map((i) => i.page))];
+    const key = pages.join('\n');
+    if (!pages.length || key === tzLocaleKey) return;
+    tzLocaleKey = key;
+    fetch('/sites/locale', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pages }) })
+      .then((r) => (r.ok ? r.json() : { pages: {} }))
+      .then((j) => (tzLocale = j.pages ?? {}))
+      .catch(() => {});
+  });
+
   // «Другие сайты» в ТЗ: сначала быстро — ссылки из групп, затем позиции из Google.
   let others = $state<Record<string, { owners: OtherOwner[]; links: OtherLink[] }>>({});
   let othersLoading = $state(false);
@@ -561,11 +575,13 @@
           {:else}
             <div class="overflow-x-auto rounded border border-line">
               <table class="app-table">
-                <thead><tr><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('site')}>Сайт<SortCaret dir={tzSort === 'site' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('kind')}>Тип<SortCaret dir={tzSort === 'kind' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('query')}>Анкор<SortCaret dir={tzSort === 'query' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('page')}>Страница<SortCaret dir={tzSort === 'page' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('qty')}>Ссылок<SortCaret dir={tzSort === 'qty' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('position')}>Pos<SortCaret dir={tzSort === 'position' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('impressions')}>Impr<SortCaret dir={tzSort === 'impressions' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('clicks')}>Clicks<SortCaret dir={tzSort === 'clicks' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th title="Сколько ссылок на этот ключ взято для других ваших сайтов; ⚠ — другой сайт стоит выше">Другие сайты</th><th></th></tr></thead>
+                <thead><tr><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('site')}>Сайт<SortCaret dir={tzSort === 'site' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th title="Язык страницы — как указан на сайте. Названия — как на бирже ссылок">Язык</th><th title="Страна: из «Карты ключей FUT», иначе по зоне домена, иначе Global. Названия — как на бирже ссылок">Гео</th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('kind')}>Тип<SortCaret dir={tzSort === 'kind' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('query')}>Анкор<SortCaret dir={tzSort === 'query' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('page')}>Страница<SortCaret dir={tzSort === 'page' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('qty')}>Ссылок<SortCaret dir={tzSort === 'qty' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('position')}>Pos<SortCaret dir={tzSort === 'position' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('impressions')}>Impr<SortCaret dir={tzSort === 'impressions' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('clicks')}>Clicks<SortCaret dir={tzSort === 'clicks' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th title="Сколько ссылок на этот ключ взято для других ваших сайтов; ⚠ — другой сайт стоит выше">Другие сайты</th><th></th></tr></thead>
                 <tbody>
                   {#each tzItems as it (it.id)}
                     <tr>
                       <td class="whitespace-nowrap text-ink-2"><span class="pii">{siteHostname(it.siteUrl)}</span></td>
+                      <td class="whitespace-nowrap text-xs text-ink-2">{tzLocale[it.page]?.language ?? (tzLocale[it.page] ? '—' : '…')}</td>
+                      <td class="whitespace-nowrap text-xs text-ink-2">{tzLocale[it.page]?.geo ?? '…'}</td>
                       <td class="text-xs text-ink-3">{it.kind === 'naked' ? NAKED_LABEL[nakedVariant(it.query)] : 'Анкор'}</td>
                       <td class="font-medium"><span class="pii">{it.kind === 'naked' ? nakedAnchor(it.page, it.query) : it.query}</span></td>
                       <td class="max-w-md"><a class="pii break-all text-ink-3 hover:text-acc hover:underline" href={it.page} target="_blank" rel="noopener noreferrer">{it.page}</a></td>

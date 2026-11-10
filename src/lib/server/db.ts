@@ -295,6 +295,14 @@ CREATE TABLE IF NOT EXISTS checkout_sources (
   PRIMARY KEY (day, host, source)
 );
 
+-- Язык страницы (атрибут lang у <html>) для колонок «Язык» и «Гео»:
+-- по главной сайта или его языковой папке; проверяется раз в неделю.
+CREATE TABLE IF NOT EXISTS site_locale (
+  url        TEXT PRIMARY KEY,
+  lang       TEXT,
+  error      TEXT,
+  checked_at INTEGER NOT NULL
+);
 -- Ответы Search Console: копия памяти хаба, чтобы перезапуск сервера
 -- (выкладка обновления) не начинал с пустой памяти.
 CREATE TABLE IF NOT EXISTS gsc_cache (

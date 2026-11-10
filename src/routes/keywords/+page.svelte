@@ -14,7 +14,21 @@
   import { siteHref } from '$lib/utils/site';
 
   let { data } = $props();
-  onMount(() => { loadGroupItems(); });
+  // «Язык» и «Гео» — с самих сайтов (lang страницы, «Карта ключей FUT», зона домена).
+  let locale = $state<Record<string, { languages: string[]; geos: string[] }>>({});
+  let localeLoading = $state(false);
+  async function loadLocale() {
+    localeLoading = true;
+    try {
+      const r = await fetch('/sites/locale', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sites: data.sites.map((x) => x.siteUrl) }) });
+      if (r.ok) locale = (await r.json()).sites ?? {};
+    } catch {
+      // колонки останутся пустыми
+    } finally {
+      localeLoading = false;
+    }
+  }
+  onMount(() => { loadGroupItems(); loadLocale(); });
 
   let open = $state<Set<string>>(new Set());
   let search = $state('');
@@ -28,7 +42,7 @@
   }
   const display = (u: string) => u.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-  type K = 'site' | 'account' | 'map' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay' | 'group';
+  type K = 'site' | 'account' | 'lang' | 'geo' | 'map' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay' | 'group';
   const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay', 'group']);
   const sites = $derived(
     sort.apply(
@@ -36,6 +50,8 @@
       (s, k) =>
         k === 'site' ? display(s.siteUrl)
         : k === 'account' ? (s.accountLabel ?? s.accountEmail)
+        : k === 'lang' ? (locale[s.siteUrl]?.languages.join(', ') || null)
+        : k === 'geo' ? (locale[s.siteUrl]?.geos.join(', ') || null)
         : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0] ?? null)
         : k === 'pay' ? (data.pay[s.siteUrl] ?? 0)
         : k === 'group' ? (siteInTarget(s.siteUrl) ? 1 : 0)
@@ -79,6 +95,8 @@
             <tr>
               <SortTh {sort} k="site" label="Сайт" />
               <SortTh {sort} k="account" label="Консоль" />
+              <SortTh {sort} k="lang" label="Язык" title="Язык сайта — как указан на его странице (у сайта с языковыми папками — все языки). Названия — как на бирже ссылок" />
+              <SortTh {sort} k="geo" label="Гео" title="Страна сайта: из «Карты ключей FUT», иначе по зоне домена (.de, .co.uk), иначе Global. Названия — как на бирже ссылок" />
               <SortTh {sort} k="map" label="Карта ключей" title="Главный ключ сайта и сколько второстепенных — из «Карты ключей FUT». Сайт берётся из карты один раз и потом не меняется; сайты, которых в карте ещё нет, хаб ищет в ней раз в 3 дня" />
               <SortTh {sort} k="impressions" label="Impr" num />
               <SortTh {sort} k="clicks" label="Clicks" num />
@@ -102,6 +120,8 @@
                   </span>
                 </td>
                 <td class="pii text-xs text-ink-3">{s.accountLabel ?? s.accountEmail}</td>
+                <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].languages.join(', ') || '—'}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
+                <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].geos.join(', ')}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
                 <td class="max-w-[16rem] text-xs">
                   {#if km}
                     <span class="flex flex-wrap items-center gap-1" title="«Карта ключей FUT»: главный ключ — {km.main.join(', ') || 'нет'}; второстепенных — {km.secondary}">
@@ -128,7 +148,7 @@
               </tr>
               {#if open.has(k)}
                 <tr class="bg-sunk hover:bg-sunk">
-                  <td colspan="10" class="px-3">
+                  <td colspan="12" class="px-3">
                     {#key data.period.key}
                       <SiteKeysTable siteUrl={s.siteUrl} accountId={s.accountId} period={data.period.key} siteTotals={s.error ? null : { clicks: s.clicks, impressions: s.impressions }} />
                     {/key}

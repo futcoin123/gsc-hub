@@ -185,13 +185,22 @@ const csvCell = (v: unknown): string => {
   return /[";\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
-/** CSV для Excel: разделитель «;» и BOM, чтобы кириллица открывалась без кракозябр. */
-export function groupItemsCsv(groupName: string, items: GroupItem[]): string {
-  const head = ['Группа', 'Сайт', 'Тип', 'Анкор', 'Страница', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %'];
+/**
+ * CSV для Excel: разделитель «;» и BOM, чтобы кириллица открывалась без кракозябр.
+ * locale — язык и гео страницы (названия как на бирже ссылок); без него колонки пустые.
+ */
+export function groupItemsCsv(
+  groupName: string,
+  items: GroupItem[],
+  locale: Record<string, { language: string | null; geo: string }> = {}
+): string {
+  const head = ['Группа', 'Сайт', 'Язык', 'Гео', 'Тип', 'Анкор', 'Страница', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %'];
   const lines = items.map((i) =>
     [
       groupName,
       i.siteUrl,
+      locale[i.page]?.language ?? '',
+      locale[i.page]?.geo ?? '',
       i.kind === 'naked' ? NAKED_LABEL[nakedVariant(i.query)] : 'Анкор',
       i.kind === 'naked' ? nakedAnchor(i.page, i.query) : i.query,
       i.page,
