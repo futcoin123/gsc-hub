@@ -14,7 +14,7 @@
   import { bareAddress, nakedQuery, type NakedVariant } from '$lib/utils/naked';
   import { TableSort } from '$lib/table-sort.svelte';
   import { classifyIntent } from '$lib/utils/intent';
-  import { keyMarker, markTitle, missingKeys, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
+  import { keyMarker, markTitle, missingKeys, mapGeo, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
   import { checkoutLeads, checkoutSplit } from '$lib/utils/checkout-lead';
   import { Volumes } from '$lib/volumes.svelte';
   import { otherGroups, gi, activeGroup, itemKey, inActive, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
@@ -75,7 +75,7 @@
   let loading = $state(true);
   // Безанкорные ссылки: на главную — полным адресом и просто доменом, на страницы
   // второстепенных ключей карты — полным адресом. Только страницы этого сайта.
-  type NakedRow = { page: string; variant: NakedVariant; role: 'main' | 'secondary'; key: string | null; text: string };
+  type NakedRow = { page: string; variant: NakedVariant; role: 'main' | 'secondary'; key: string | null; geo: string | null; text: string };
   const nakedRows = $derived.by(() => {
     const home = siteHref(siteUrl);
     const abs = (u: string) => {
@@ -88,21 +88,23 @@
     };
     const out: NakedRow[] = [];
     const seen = new Set<string>();
-    const push = (page: string | null, variant: NakedVariant, role: NakedRow['role'], key: string | null) => {
-      if (!page || seen.has(page + '|' + variant)) return;
-      seen.add(page + '|' + variant);
-      out.push({ page, variant, role, key, text: variant === 'domain' ? bareAddress(page) : page });
-    };
     const map = keyMap ?? [];
     const mains = map.filter((p) => p.role === 'main');
-    const homeKey = mains.find((p) => abs(p.url) === abs(home))?.key ?? null;
-    push(abs(home), 'url', 'main', homeKey);
-    push(abs(home), 'domain', 'main', homeKey);
+    // У сайта с языковыми папками рядом с ключом — страна (как в «Карте ключей»).
+    const geoOf = (country: string) => (mains.length > 1 ? mapGeo(country) : null);
+    const push = (page: string | null, variant: NakedVariant, role: NakedRow['role'], key: string | null, geo: string | null) => {
+      if (!page || seen.has(page + '|' + variant)) return;
+      seen.add(page + '|' + variant);
+      out.push({ page, variant, role, key, geo, text: variant === 'domain' ? bareAddress(page) : page });
+    };
+    const homePage = mains.find((p) => abs(p.url) === abs(home));
+    push(abs(home), 'url', 'main', homePage?.key ?? null, homePage ? geoOf(homePage.country) : null);
+    push(abs(home), 'domain', 'main', homePage?.key ?? null, homePage ? geoOf(homePage.country) : null);
     for (const p of mains) {
-      push(abs(p.url), 'url', 'main', p.key);
-      push(abs(p.url), 'domain', 'main', p.key);
+      push(abs(p.url), 'url', 'main', p.key, geoOf(p.country));
+      push(abs(p.url), 'domain', 'main', p.key, geoOf(p.country));
     }
-    for (const p of map.filter((x) => x.role === 'secondary')) push(abs(p.url), 'url', 'secondary', p.key);
+    for (const p of map.filter((x) => x.role === 'secondary')) push(abs(p.url), 'url', 'secondary', p.key, geoOf(p.country));
     return out;
   });
   const notFound = $derived(keyMap && !loading ? missingKeys(keyMap, rows.map((r) => r.query)) : []);
@@ -229,7 +231,7 @@
     {#if keyMap}
       {@const main = keyMap.filter((p) => p.role === 'main')}
       <p class="mb-1 text-xs text-ink-2">
-        Карта ключей FUT: главный {#each main as p, i (p.country + p.url)}{i ? ', ' : ''}<span class="badge badge-ok" title="{p.url} ({p.country})">{p.key}</span>{/each}{#if !main.length}—{/if}
+        Карта ключей FUT: главный {#each main as p, i (p.country + p.url)}{i ? ', ' : ''}<span class="badge badge-ok" title="Главная {p.url} · {mapGeo(p.country)}">{main.length > 1 ? `${p.key} (${mapGeo(p.country)})` : p.key}</span>{/each}{#if !main.length}—{/if}
         · второстепенных {keyMap.length - main.length}
         {#if notFound.length}
           · <span class="text-warn" title="Ни одного показа в Google за период по этим ключам карты (и их вариантам)">нет в Google за период: {notFound.map((p) => `${p.key}${p.role === 'main' ? ' (главный)' : ''}`).join(', ')}</span>
@@ -259,7 +261,7 @@
               <td class="whitespace-nowrap text-xs text-ink-3">{n.variant === 'domain' ? 'Безанкор (домен)' : 'Безанкор (URL)'}</td>
               <td class="text-xs">
                 <span class="badge {n.role === 'main' ? 'badge-ok' : 'badge-muted'}">{n.role === 'main' ? 'главная' : 'второстеп.'}</span>
-                {#if n.key}<span class="ml-1 text-ink-3">{n.key}</span>{/if}
+                {#if n.key}<span class="ml-1 text-ink-3">{n.key}{n.geo ? ` (${n.geo})` : ''}</span>{/if}
               </td>
               <td><NakedCell {siteUrl} page={n.page} variant={n.variant} /></td>
             </tr>

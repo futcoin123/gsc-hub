@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb, type Db } from '../src/lib/server/db';
 import { importKeyMap, keyMapFor, keyMapAll, keyMapPublicInfo, decryptKeyMap } from '../src/lib/server/key-map';
-import { keyMarker, missingKeys, mapSummary, type MapPage } from '../src/lib/utils/key-map';
+import { keyMarker, missingKeys, mapSummary, mainLabel, type MapPage } from '../src/lib/utils/key-map';
 import { buildKeyMap, encryptKeyMap, readMapHtml } from '../scripts/key-map.mjs';
 
 // Кусок данных «Карты ключей FUT» в том виде, как он лежит в странице карты.
@@ -90,7 +90,15 @@ describe('пометки у ключей', () => {
   });
 
   it('сводка и ключи без показов', () => {
-    expect(mapSummary(pages)).toEqual({ main: ['fifa coins', 'fifa coins kaufen'], secondary: 2 });
+    expect(mapSummary(pages)).toEqual({
+      main: [
+        { key: 'fifa coins', geo: 'Netherlands', url: '/nl/' },
+        { key: 'fifa coins kaufen', geo: 'Germany', url: '/' }
+      ],
+      secondary: 2
+    });
+    expect(mainLabel(mapSummary(pages).main[0], true)).toBe('fifa coins (Netherlands)');
+    expect(mainLabel(mapSummary(pages).main[0], false)).toBe('fifa coins');
     expect(missingKeys(pages, ['fifa coin kaufen', 'fifa coins']).map((p) => p.url)).toEqual(['/x/']);
   });
 });

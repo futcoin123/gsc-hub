@@ -12,6 +12,7 @@
   import { TableSort } from '$lib/table-sort.svelte';
   import { loadGroupItems, siteInTarget } from '$lib/group-items.svelte';
   import { siteHref } from '$lib/utils/site';
+  import { mainLabel } from '$lib/utils/key-map';
 
   let { data } = $props();
   // «Язык» и «Гео» — с самих сайтов (lang страницы, «Карта ключей FUT», зона домена).
@@ -52,7 +53,7 @@
         : k === 'account' ? (s.accountLabel ?? s.accountEmail)
         : k === 'lang' ? (locale[s.siteUrl]?.languages.join(', ') || null)
         : k === 'geo' ? (locale[s.siteUrl]?.geos.join(', ') || null)
-        : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0] ?? null)
+        : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0]?.key ?? null)
         : k === 'pay' ? (data.pay[s.siteUrl] ?? 0)
         : k === 'group' ? (siteInTarget(s.siteUrl) ? 1 : 0)
         : s[k]
@@ -122,8 +123,8 @@
                 <td class="pii text-xs text-ink-3">{s.accountLabel ?? s.accountEmail}</td>
                 <td class="max-w-[16rem] text-xs">
                   {#if km}
-                    <span class="flex flex-wrap items-center gap-1" title="«Карта ключей FUT»: главный ключ — {km.main.join(', ') || 'нет'}; второстепенных — {km.secondary}">
-                      {#each km.main as k (k)}<span class="badge badge-ok">{k}</span>{/each}
+                    <span class="flex flex-wrap items-center gap-1" title="«Карта ключей FUT»: главный ключ — {km.main.map((m) => mainLabel(m, true)).join(', ') || 'нет'}; второстепенных — {km.secondary}">
+                      {#each km.main as m (m.key + m.url)}<span class="badge badge-ok" title="Главная {m.url} · {m.geo}">{mainLabel(m, km.main.length > 1)}</span>{/each}
                       {#if km.secondary}<span class="text-ink-3">+{km.secondary} второстеп.</span>{/if}
                     </span>
                   {:else}

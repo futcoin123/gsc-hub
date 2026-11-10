@@ -2,6 +2,7 @@
 // Ключ из Search Console совпадает с ключом карты, если это та же фраза, один
 // из её вариантов в группе карты (Google считает их одним запросом) или те же
 // слова в другом порядке.
+import { COUNTRY, MAP_COUNTRY } from './locale-names';
 
 export type KeyRole = 'main' | 'secondary';
 
@@ -52,11 +53,26 @@ export function markTitle(m: KeyMark): string {
   return `${what} по «Карте ключей FUT»${via}. Страница по карте: ${m.page.url} (${m.page.country})`;
 }
 
-/** Коротко для строки сайта: главные ключи и сколько второстепенных. */
-export function mapSummary(pages: MapPage[]): { main: string[]; secondary: number } {
-  const main = [...new Set(pages.filter((p) => p.role === 'main').map((p) => p.key))];
+/** Страна страницы карты названием из списка владелицы: US → United States. */
+export function mapGeo(country: string): string {
+  return COUNTRY[MAP_COUNTRY[country] ?? ''] ?? country;
+}
+
+/**
+ * Коротко для строки сайта: главные ключи (у каждого — страна и папка, нужны,
+ * когда главных несколько: сайт с языковыми папками) и сколько второстепенных.
+ */
+export function mapSummary(pages: MapPage[]): { main: { key: string; geo: string; url: string }[]; secondary: number } {
+  const main: { key: string; geo: string; url: string }[] = [];
+  for (const p of pages) {
+    if (p.role !== 'main' || main.some((m) => m.key === p.key && m.url === p.url)) continue;
+    main.push({ key: p.key, geo: mapGeo(p.country), url: p.url });
+  }
   return { main, secondary: pages.filter((p) => p.role === 'secondary').length };
 }
+
+/** Подпись главного ключа: у сайта с несколькими главными — со страной в скобках. */
+export const mainLabel = (m: { key: string; geo: string }, many: boolean) => (many ? `${m.key} (${m.geo})` : m.key);
 
 /** Страницы карты, ни один ключ которых не встретился среди запросов сайта за период. */
 export function missingKeys(pages: MapPage[], queries: string[]): MapPage[] {

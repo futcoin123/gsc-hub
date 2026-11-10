@@ -36,7 +36,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   } catch {
     // карта не прочиталась — колонка покажет «нет в карте»
   }
-  const keyMap: Record<string, { main: string[]; secondary: number } | null> = {};
+  const keyMap: Record<string, ReturnType<typeof mapSummary> | null> = {};
   for (const st of sites) {
     const pages = all.get(hostOf(st.siteUrl));
     keyMap[st.siteUrl] = pages ? mapSummary(pages) : null;
