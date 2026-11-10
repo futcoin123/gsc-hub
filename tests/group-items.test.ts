@@ -98,8 +98,8 @@ describe('ключи группы (закупка)', () => {
     const csv = groupItemsCsv('28-10-26', listGroupItems(db, g));
     expect(csv.startsWith('﻿')).toBe(true);
     const [head, row] = csv.slice(1).split('\r\n');
-    expect(head).toBe('Группа;Сайт;Язык;Гео;Тип;Анкор;Страница;Кол-во ссылок;Позиция;Показы;Клики;CTR %');
-    expect(row).toBe('28-10-26;sc-domain:a.com;;;Анкор;"\'=HYPERLINK(""x"")";https://a.com/p/;1;7,3;23;1;4,3');
+    expect(head).toBe('Группа;Сайт;Язык;Гео;Тип;Страница;Анкор;Кол-во ссылок;Позиция;Показы;Клики;CTR %');
+    expect(row).toBe('28-10-26;sc-domain:a.com;;;Анкор;https://a.com/p/;"\'=HYPERLINK(""x"")";1;7,3;23;1;4,3');
   });
 
   it('количество ссылок: по умолчанию 1, меняется, ограничено 1..1000', () => {
@@ -140,8 +140,8 @@ describe('ключи группы (закупка)', () => {
       ['https://a.com/it/', '[домен]', 1]
     ]);
     const csv = groupItemsCsv('A', rows).slice(1).split('\r\n');
-    expect(csv[2]).toBe('A;sc-domain:a.com;;;Безанкор (домен);a.com;https://a.com/;1;;;;');
-    expect(csv[3]).toBe('A;sc-domain:a.com;;;Безанкор (домен);a.com/it/;https://a.com/it/;1;;;;');
+    expect(csv[2]).toBe('A;sc-domain:a.com;;;Безанкор (домен);https://a.com/;a.com;1;;;;');
+    expect(csv[3]).toBe('A;sc-domain:a.com;;;Безанкор (домен);https://a.com/it/;a.com/it/;1;;;;');
   });
 
   it('история сайта: все группы, новые сверху, только этот сайт', () => {
