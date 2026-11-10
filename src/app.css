@@ -344,17 +344,17 @@
   /* Строка сайта под мышкой: заметный голубой и синяя полоса слева, чтобы
      глазами не искать, какая строка (просьба владелицы 10.11.2026). */
   .app-table.is-roomy > tbody > tr.is-site:hover {
-    @apply bg-acc-t;
+    @apply bg-acc/20;
   }
   .app-table.is-roomy > tbody > tr.is-site:hover > td:first-child {
-    box-shadow: inset 3px 0 0 rgb(var(--acc));
-    color: rgb(var(--acc));
+    box-shadow: inset 4px 0 0 rgb(var(--acc));
+    color: rgb(var(--acc-deep));
   }
 
   /* Строка «Итого» над сайтами: свой цвет, чтобы не путать с сайтом. */
   .app-table tbody tr.is-total,
   .app-table tbody tr.is-total:hover {
-    @apply border-b-2 border-acc/40 bg-acc-t font-semibold text-ink;
+    @apply border-b-2 border-acc/70 bg-acc/15 font-semibold text-ink;
   }
   .app-table tbody tr.is-hidden-row {
     @apply opacity-50;
