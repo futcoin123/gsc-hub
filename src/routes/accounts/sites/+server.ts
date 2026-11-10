@@ -51,8 +51,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       }
     })
   );
-  // Сбрасываем всю память Search Console: у новых сайтов должны появиться и цифры.
-  gscCacheInvalidate();
+  // Забываем списки сайтов и сводки по всем сайтам, где эти списки сидят.
+  // Цифры отдельных сайтов не трогаем: они не меняются, а у новых сайтов
+  // их и так ещё нет — иначе после кнопки все страницы грузились бы заново.
+  for (const prefix of ['sites:', 'qhosts:', 'geos:', 'allkw:', 'portfolio:']) gscCacheInvalidate(prefix);
 
   const out: Record<string, { total: number; unverified: string[]; added: string[] } | { error: string }> = {};
   await Promise.all(

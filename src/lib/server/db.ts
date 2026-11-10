@@ -295,6 +295,14 @@ CREATE TABLE IF NOT EXISTS checkout_sources (
   PRIMARY KEY (day, host, source)
 );
 
+-- Ответы Search Console: копия памяти хаба, чтобы перезапуск сервера
+-- (выкладка обновления) не начинал с пустой памяти.
+CREATE TABLE IF NOT EXISTS gsc_cache (
+  key     TEXT PRIMARY KEY,
+  at      INTEGER NOT NULL,
+  expires INTEGER NOT NULL,
+  value   TEXT NOT NULL
+);
 -- «Карта ключей FUT»: главные и второстепенные ключи сайтов. Сайт берётся из
 -- карты один раз и потом не меняется (правило владелицы 09.11.2026).
 CREATE TABLE IF NOT EXISTS key_map_hosts (
