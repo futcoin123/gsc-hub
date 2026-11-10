@@ -194,13 +194,11 @@ export function groupItemsCsv(
   items: GroupItem[],
   locale: Record<string, { language: string | null; geo: string }> = {}
 ): string {
-  const head = ['Группа', 'Сайт', 'Язык', 'Гео', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %'];
+  const head = ['Группа', 'Сайт', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %', 'Язык', 'Гео'];
   const lines = items.map((i) =>
     [
       groupName,
       i.siteUrl,
-      locale[i.page]?.language ?? '',
-      locale[i.page]?.geo ?? '',
       i.kind === 'naked' ? NAKED_LABEL[nakedVariant(i.query)] : 'Анкор',
       i.page,
       i.kind === 'naked' ? nakedAnchor(i.page, i.query) : i.query,
@@ -208,7 +206,9 @@ export function groupItemsCsv(
       i.position === null ? '' : i.position.toFixed(1).replace('.', ','),
       i.impressions ?? '',
       i.clicks ?? '',
-      i.ctr === null ? '' : (i.ctr * 100).toFixed(1).replace('.', ',')
+      i.ctr === null ? '' : (i.ctr * 100).toFixed(1).replace('.', ','),
+      locale[i.page]?.language ?? '',
+      locale[i.page]?.geo ?? ''
     ]
       .map(csvCell)
       .join(';')
