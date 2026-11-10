@@ -122,10 +122,26 @@ describe('ключи группы (закупка)', () => {
     expect(() => addNakedItem(db, g, 'sc-domain:a.com', 'a.com', 1)).toThrow(/https/);
     const [n] = listGroupItems(db, g);
     expect(n).toMatchObject({ kind: 'naked', query: '', page: 'https://a.com/', qty: 5 });
-    // Безанкорные не помечают ключи в Striking.
-    expect(itemMarks(db)).toEqual({});
+    // Пометка безанкорной ссылки — с пустым ключом: с ключами не путается.
+    expect(Object.keys(itemMarks(db))).toEqual(['https://a.com/\n']);
     const csv = groupItemsCsv('A', listGroupItems(db, g)).slice(1).split('\r\n')[1];
-    expect(csv).toBe('A;sc-domain:a.com;Безанкор;;https://a.com/;5;;;;');
+    expect(csv).toBe('A;sc-domain:a.com;Безанкор (URL);https://a.com/;https://a.com/;5;;;;');
+  });
+
+  it('безанкорные двух видов: полный адрес и просто домен — разные строки', () => {
+    const g = createSiteGroup(db, 'A');
+    addNakedItem(db, g, 'sc-domain:a.com', 'https://a.com/', 2, 'url');
+    addNakedItem(db, g, 'sc-domain:a.com', 'https://a.com/', 1, 'domain');
+    addNakedItem(db, g, 'sc-domain:a.com', 'https://a.com/it/', 1, 'domain');
+    const rows = listGroupItems(db, g);
+    expect(rows.map((r) => [r.page, r.query, r.qty])).toEqual([
+      ['https://a.com/', '', 2],
+      ['https://a.com/', '[домен]', 1],
+      ['https://a.com/it/', '[домен]', 1]
+    ]);
+    const csv = groupItemsCsv('A', rows).slice(1).split('\r\n');
+    expect(csv[2]).toBe('A;sc-domain:a.com;Безанкор (домен);a.com;https://a.com/;1;;;;');
+    expect(csv[3]).toBe('A;sc-domain:a.com;Безанкор (домен);a.com/it/;https://a.com/it/;1;;;;');
   });
 
   it('история сайта: все группы, новые сверху, только этот сайт', () => {

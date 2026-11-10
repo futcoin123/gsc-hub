@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { NAKED_LABEL, nakedAnchor, nakedVariant } from '$lib/utils/naked';
   import IntentBadge from '$lib/components/IntentBadge.svelte';
   import { enhance } from '$app/forms';
   import { siteHostname } from '$lib/utils/url-filters';
@@ -431,8 +432,8 @@
                             <tbody>
                               {#each list as it (it.id)}
                                 <tr>
-                                  <td class="text-xs text-ink-3">{it.kind === 'naked' ? 'Безанкор' : 'Анкор'}</td>
-                                  <td class="pii font-medium">{it.kind === 'naked' ? '—' : it.query}</td>
+                                  <td class="text-xs text-ink-3">{it.kind === 'naked' ? NAKED_LABEL[nakedVariant(it.query)] : 'Анкор'}</td>
+                                  <td class="pii font-medium">{it.kind === 'naked' ? nakedAnchor(it.page, it.query) : it.query}</td>
                                   <td>{#if it.kind !== 'naked'}<IntentBadge query={it.query} page={it.page} />{/if}</td>
                                   <td class="max-w-md"><a class="pii break-all text-ink-3 hover:text-acc hover:underline" href={it.page} target="_blank" rel="noopener noreferrer">{it.page}</a></td>
                                   <td class="num">
@@ -565,8 +566,8 @@
                   {#each tzItems as it (it.id)}
                     <tr>
                       <td class="whitespace-nowrap text-ink-2"><span class="pii">{siteHostname(it.siteUrl)}</span></td>
-                      <td class="text-xs text-ink-3">{it.kind === 'naked' ? 'Безанкор' : 'Анкор'}</td>
-                      <td class="font-medium"><span class="pii">{it.kind === 'naked' ? '—' : it.query}</span></td>
+                      <td class="text-xs text-ink-3">{it.kind === 'naked' ? NAKED_LABEL[nakedVariant(it.query)] : 'Анкор'}</td>
+                      <td class="font-medium"><span class="pii">{it.kind === 'naked' ? nakedAnchor(it.page, it.query) : it.query}</span></td>
                       <td class="max-w-md"><a class="pii break-all text-ink-3 hover:text-acc hover:underline" href={it.page} target="_blank" rel="noopener noreferrer">{it.page}</a></td>
                       <td class="num">
                         {#if group.fixedAt}

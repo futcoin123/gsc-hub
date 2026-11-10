@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
  *   { action: 'qtyById', groupId, itemId, qty }     — количество у строки группы по id
  *   { action: 'removeById', groupId, itemId }       — убрать строку группы по id
  *   { action: 'qty',    groupId, page, query, qty }   — сколько ссылок на связку
- *   { action: 'naked',  groupId, site, page, qty }    — безанкорные ссылки на страницу
+ *   { action: 'naked',  groupId, site, page, qty, variant? } — безанкорные ссылки на страницу ('url' | 'domain')
  *   { action: 'create', name? }                       — новая группа (по умолчанию сегодняшняя дата)
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -78,7 +78,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     else if (body.action === 'qtyById') setItemQtyById(db(), groupId, Number(body.itemId), Number(body.qty));
     else if (body.action === 'removeById') removeGroupItemById(db(), groupId, Number(body.itemId));
     else if (body.action === 'qty') setItemQty(db(), groupId, String(body.page ?? ''), String(body.query ?? ''), Number(body.qty));
-    else if (body.action === 'naked') addNakedItem(db(), groupId, String(body.site ?? ''), String(body.page ?? ''), Number(body.qty));
+    else if (body.action === 'naked') addNakedItem(db(), groupId, String(body.site ?? ''), String(body.page ?? ''), Number(body.qty), body.variant === 'domain' ? 'domain' : 'url');
     else if (body.action === 'host') {
       const g = getSiteGroup(db(), groupId);
       const host = normalizeHost(String(body.site ?? ''));

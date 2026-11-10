@@ -1,5 +1,6 @@
 import { foldQuery, hostKey } from '$lib/utils/fold-query';
 import type { Db } from './db';
+import { nakedQuery, nakedAnchor, nakedVariant, NAKED_LABEL, type NakedVariant } from '$lib/utils/naked';
 
 // Ключи группы: связки «страница + ключ», отобранные в Striking Distance.
 // Группа с датой в названии («28-10-26») — это закупка ссылок.
@@ -67,10 +68,11 @@ export function addGroupItem(db: Db, groupId: number, item: NewItem): void {
 }
 
 /**
- * Безанкорные ссылки на страницу сайта. Повторное добавление той же страницы
- * прибавляет количество.
+ * Безанкорные ссылки на страницу сайта: текстом ссылки — полный адрес ('url')
+ * или просто адрес без https:// ('domain'). Повторное добавление той же
+ * страницы того же вида прибавляет количество.
  */
-export function addNakedItem(db: Db, groupId: number, siteUrl: string, page: string, qty: number): void {
+export function addNakedItem(db: Db, groupId: number, siteUrl: string, page: string, qty: number, variant: NakedVariant = 'url'): void {
   requireOpen(db, groupId);
   let url: URL;
   try {
@@ -82,9 +84,9 @@ export function addNakedItem(db: Db, groupId: number, siteUrl: string, page: str
   if (!siteUrl.trim()) throw new Error('Нужен сайт');
   db.prepare(
     `INSERT INTO site_group_items (group_id, site_url, query, page, added_at, qty, kind)
-     VALUES (?, ?, '', ?, ?, ?, 'naked')
+     VALUES (?, ?, ?, ?, ?, ?, 'naked')
      ON CONFLICT (group_id, page, query) DO UPDATE SET qty = MIN(qty + excluded.qty, ${QTY_MAX})`
-  ).run(groupId, siteUrl, url.href, Date.now(), cleanQty(qty));
+  ).run(groupId, siteUrl, nakedQuery(variant), url.href, Date.now(), cleanQty(qty));
 }
 
 /** Изменить количество ссылок у связки. */
@@ -161,7 +163,7 @@ export function itemMarks(
   siteUrl?: string
 ): Record<string, { groupId: number; name: string; qty: number; at: number }[]> {
   const sql = `SELECT i.page, i.query, i.qty, g.id, g.name, COALESCE(g.fixed_at, g.created_at) AS at FROM site_group_items i JOIN site_groups g ON g.id = i.group_id
-     WHERE i.kind = 'anchor' ${siteUrl ? 'AND i.site_url = ?' : ''} ORDER BY g.created_at, g.id`;
+     ${siteUrl ? 'WHERE i.site_url = ?' : ''} ORDER BY g.created_at, g.id`;
   const rows = (siteUrl ? db.prepare(sql).all(siteUrl) : db.prepare(sql).all()) as {
     page: string;
     query: string;
@@ -190,8 +192,8 @@ export function groupItemsCsv(groupName: string, items: GroupItem[]): string {
     [
       groupName,
       i.siteUrl,
-      i.kind === 'naked' ? 'Безанкор' : 'Анкор',
-      i.kind === 'naked' ? '' : i.query,
+      i.kind === 'naked' ? NAKED_LABEL[nakedVariant(i.query)] : 'Анкор',
+      i.kind === 'naked' ? nakedAnchor(i.page, i.query) : i.query,
       i.page,
       i.qty,
       i.position === null ? '' : i.position.toFixed(1).replace('.', ','),

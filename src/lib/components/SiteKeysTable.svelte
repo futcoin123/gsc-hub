@@ -9,6 +9,9 @@
   import OtherSitesInline from './OtherSitesInline.svelte';
   import VolumeCell from './VolumeCell.svelte';
   import PositionChart from './PositionChart.svelte';
+  import NakedCell from './NakedCell.svelte';
+  import { siteHref } from '$lib/utils/site';
+  import { bareAddress, type NakedVariant } from '$lib/utils/naked';
   import { TableSort } from '$lib/table-sort.svelte';
   import { classifyIntent } from '$lib/utils/intent';
   import { keyMarker, markTitle, missingKeys, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
@@ -70,6 +73,38 @@
     }
   }
   let loading = $state(true);
+  // Безанкорные ссылки: на главную — полным адресом и просто доменом, на страницы
+  // второстепенных ключей карты — полным адресом. Только страницы этого сайта.
+  type NakedRow = { page: string; variant: NakedVariant; role: 'main' | 'secondary'; key: string | null; text: string };
+  const nakedRows = $derived.by(() => {
+    const home = siteHref(siteUrl);
+    const abs = (u: string) => {
+      try {
+        const href = new URL(u, home).href;
+        return href.startsWith(home) ? href : null;
+      } catch {
+        return null;
+      }
+    };
+    const out: NakedRow[] = [];
+    const seen = new Set<string>();
+    const push = (page: string | null, variant: NakedVariant, role: NakedRow['role'], key: string | null) => {
+      if (!page || seen.has(page + '|' + variant)) return;
+      seen.add(page + '|' + variant);
+      out.push({ page, variant, role, key, text: variant === 'domain' ? bareAddress(page) : page });
+    };
+    const map = keyMap ?? [];
+    const mains = map.filter((p) => p.role === 'main');
+    const homeKey = mains.find((p) => abs(p.url) === abs(home))?.key ?? null;
+    push(abs(home), 'url', 'main', homeKey);
+    push(abs(home), 'domain', 'main', homeKey);
+    for (const p of mains) {
+      push(abs(p.url), 'url', 'main', p.key);
+      push(abs(p.url), 'domain', 'main', p.key);
+    }
+    for (const p of map.filter((x) => x.role === 'secondary')) push(abs(p.url), 'url', 'secondary', p.key);
+    return out;
+  });
   const notFound = $derived(keyMap && !loading ? missingKeys(keyMap, rows.map((r) => r.query)) : []);
   let err = $state<string | null>(null);
   let other = $state<Record<string, { owners: OtherOwner[]; links: OtherLink[] }>>({});
@@ -206,6 +241,28 @@
   {/if}
   {#if vols.error}<p class="mb-1 text-xs text-bad">{vols.error}{#if !vols.configured} — <a class="text-acc underline" href="/settings/integrations">раздел «Сервисы»</a>{/if}</p>{/if}
   {#if vols.note}<p class="mb-1 text-xs text-emerald-700">{vols.note}</p>{/if}
+
+  {#if !loading && !err && nakedRows.length}
+    <div class="mb-2 rounded border border-line bg-pane">
+      <div class="border-b border-line px-2 py-1.5 text-xs font-semibold text-ink-2">Безанкорные ссылки <span class="font-normal text-ink-3">— текст ссылки просто адрес, без ключа: на главную двумя видами, на страницы второстепенных ключей карты — полным адресом</span></div>
+      <table class="app-table">
+        <thead><tr><th>Текст ссылки</th><th>Вид</th><th>Страница по карте</th><th class="text-right">В группу</th></tr></thead>
+        <tbody>
+          {#each nakedRows as n (n.page + '|' + n.variant)}
+            <tr>
+              <td class="pii font-medium"><a class="break-all hover:text-acc hover:underline" href={n.page} target="_blank" rel="noopener noreferrer" title="Ссылка ведёт на {n.page}">{n.text}</a></td>
+              <td class="whitespace-nowrap text-xs text-ink-3">{n.variant === 'domain' ? 'Безанкор (домен)' : 'Безанкор (URL)'}</td>
+              <td class="text-xs">
+                <span class="badge {n.role === 'main' ? 'badge-ok' : 'badge-muted'}">{n.role === 'main' ? 'главная' : 'второстеп.'}</span>
+                {#if n.key}<span class="ml-1 text-ink-3">{n.key}</span>{/if}
+              </td>
+              <td><NakedCell {siteUrl} page={n.page} variant={n.variant} /></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
 
   {#if multiDay}
     <div class="mb-2 rounded border border-line bg-pane p-2">

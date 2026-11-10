@@ -247,6 +247,39 @@ export async function toggleItem(r: ItemRow) {
   }
 }
 
+/**
+ * Безанкорная ссылка на страницу (вид 'url' — текст = полный адрес, 'domain' —
+ * просто адрес): добавить в выбранную группу или убрать. Количество меняется
+ * через setQty({ page, query: nakedQuery(variant) }).
+ */
+export async function toggleNaked(siteUrl: string, page: string, query: string, variant: 'url' | 'domain', qty: number) {
+  const g = activeGroup();
+  if (!g) {
+    gi.error = 'Сначала выберите группу над таблицей';
+    return;
+  }
+  const k = itemKey(page, query);
+  if (gi.busy.has(k)) return;
+  gi.busy = new Set(gi.busy).add(k);
+  const had = inActive(page, query);
+  try {
+    const data = had
+      ? await post('/groups/items', { action: 'remove', groupId: g.id, page, query })
+      : await post('/groups/items', { action: 'naked', groupId: g.id, site: siteUrl, page, qty, variant });
+    const rest = (gi.marks[k] ?? []).filter((m) => m.groupId !== g.id);
+    gi.marks = { ...gi.marks, [k]: had ? rest : [...rest, { groupId: g.id, name: g.name, qty, at: Date.now() }] };
+    gi.groups = data.groups;
+    gi.error = null;
+    if (lastSite) refreshHistory();
+  } catch (e) {
+    gi.error = (e as Error).message;
+  } finally {
+    const next = new Set(gi.busy);
+    next.delete(k);
+    gi.busy = next;
+  }
+}
+
 // ─── «Мои другие сайты»: кто ещё из ваших сайтов виден по ключу ────────────────
 export interface OtherOwner { host: string; siteUrl?: string; page?: string; position: number; impressions: number; clicks: number }
 export interface OtherLink { host: string; groupId: number; groupName: string; qty: number; at: number; itemId?: number; fixed?: boolean }
