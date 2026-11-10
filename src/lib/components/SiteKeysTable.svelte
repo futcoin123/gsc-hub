@@ -11,13 +11,13 @@
   import PositionChart from './PositionChart.svelte';
   import NakedCell from './NakedCell.svelte';
   import { siteHref } from '$lib/utils/site';
-  import { bareAddress, type NakedVariant } from '$lib/utils/naked';
+  import { bareAddress, nakedQuery, type NakedVariant } from '$lib/utils/naked';
   import { TableSort } from '$lib/table-sort.svelte';
   import { classifyIntent } from '$lib/utils/intent';
   import { keyMarker, markTitle, missingKeys, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
   import { checkoutLeads, checkoutSplit } from '$lib/utils/checkout-lead';
   import { Volumes } from '$lib/volumes.svelte';
-  import { otherGroups, gi, activeGroup, itemKey, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
+  import { otherGroups, gi, activeGroup, itemKey, inActive, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
 
   type Row = { query: string; page: string; position: number; impressions: number; clicks: number; ctr: number };
   let { siteUrl, accountId, period, siteTotals = null }: { siteUrl: string; accountId: string; period: string; siteTotals?: { clicks: number; impressions: number } | null } = $props();
@@ -243,9 +243,14 @@
   {#if vols.note}<p class="mb-1 text-xs text-emerald-700">{vols.note}</p>{/if}
 
   {#if !loading && !err && nakedRows.length}
-    <div class="mb-2 rounded border border-line bg-pane">
-      <div class="border-b border-line px-2 py-1.5 text-xs font-semibold text-ink-2">Безанкорные ссылки <span class="font-normal text-ink-3">— текст ссылки просто адрес, без ключа: на главную двумя видами, на страницы второстепенных ключей карты — полным адресом</span></div>
-      <table class="app-table">
+    {@const nakedInGroup = nakedRows.filter((n) => inActive(n.page, nakedQuery(n.variant))).length}
+    <!-- Свёрнуто: сначала ключи; безанкорные открываются, когда их ставить. -->
+    <details class="mb-2 rounded border border-line bg-pane">
+      <summary class="cursor-pointer select-none px-2 py-1.5 text-xs font-semibold text-ink-2 hover:bg-sunk">
+        Безанкорные ссылки ({nakedRows.length}){#if nakedInGroup}<span class="badge badge-acc ml-1">в группе {nakedInGroup}</span>{/if}
+        <span class="font-normal text-ink-3">— текст ссылки просто адрес, без ключа: на главную двумя видами, на страницы второстепенных ключей карты — полным адресом</span>
+      </summary>
+      <table class="app-table border-t border-line">
         <thead><tr><th>Текст ссылки</th><th>Вид</th><th>Страница по карте</th><th class="text-right">В группу</th></tr></thead>
         <tbody>
           {#each nakedRows as n (n.page + '|' + n.variant)}
@@ -261,7 +266,7 @@
           {/each}
         </tbody>
       </table>
-    </div>
+    </details>
   {/if}
 
   {#if multiDay}

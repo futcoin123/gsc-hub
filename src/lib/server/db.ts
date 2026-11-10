@@ -419,6 +419,14 @@ export function openDb(path: string): Db {
       db.prepare("INSERT INTO schema_marks (name) VALUES ('uptime-v2')").run();
     })();
   }
+  // Копия памяти Search Console записывалась без Map (страны сайтов, сводки
+  // ключей превращались в {}): такие строки после перезапуска ломали страницы.
+  if (!db.prepare("SELECT 1 FROM schema_marks WHERE name = 'gsc-cache-v2'").get()) {
+    db.transaction(() => {
+      db.exec('DELETE FROM gsc_cache;');
+      db.prepare("INSERT INTO schema_marks (name) VALUES ('gsc-cache-v2')").run();
+    })();
+  }
   if (!db.prepare("SELECT 1 FROM schema_marks WHERE name = 'counter-v2'").get()) {
     db.transaction(() => {
       db.exec('DELETE FROM button_clicks; DELETE FROM page_time;');

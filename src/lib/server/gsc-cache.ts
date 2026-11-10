@@ -35,6 +35,32 @@ let disk: Db | null = null;
 /** Bumped by invalidate: a refresh started before it must not write back. */
 let generation = 0;
 
+// Ответы бывают с Map/Set (страны сайтов, сводки по ключам): обычный JSON
+// превращает их в {} — после перезапуска такой ответ ломал страницу (HTTP 500
+// у частотности 10.11.2026). Поэтому в базу — с пометкой типа.
+const TAG = '__gscType';
+export function encodeCacheValue(value: unknown): string {
+  return JSON.stringify(value, function (this: Record<string, unknown>, k: string, v: unknown) {
+    const raw = this[k];
+    if (raw instanceof Map) return { [TAG]: 'Map', v: [...raw.entries()] };
+    if (raw instanceof Set) return { [TAG]: 'Set', v: [...raw] };
+    if (raw instanceof Date) return { [TAG]: 'Date', v: raw.getTime() };
+    return v;
+  });
+}
+export function decodeCacheValue(text: string): unknown {
+  return JSON.parse(text, (_k, v) => {
+    if (v && typeof v === 'object' && !Array.isArray(v) && TAG in v) {
+      const t = (v as Record<string, unknown>)[TAG];
+      const val = (v as { v: unknown }).v;
+      if (t === 'Map') return new Map(val as [unknown, unknown][]);
+      if (t === 'Set') return new Set(val as unknown[]);
+      if (t === 'Date') return new Date(val as number);
+    }
+    return v;
+  });
+}
+
 function evictOverflow() {
   // Map iterates in insertion order, so the first keys are the oldest.
   for (const key of store.keys()) {
@@ -55,7 +81,7 @@ function put(key: string, value: unknown, ttlMs: number) {
     try {
       disk
         .prepare('INSERT INTO gsc_cache (key, at, expires, value) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET at = excluded.at, expires = excluded.expires, value = excluded.value')
-        .run(key, e.at, e.expires, JSON.stringify(value));
+        .run(key, e.at, e.expires, encodeCacheValue(value));
     } catch {
       // the copy on disk is a convenience; memory still has the answer
     }
@@ -109,7 +135,7 @@ export function attachGscCacheStore(db: Db): number {
   let n = 0;
   for (const r of rows) {
     try {
-      store.set(r.key, { at: r.at, expires: r.expires, value: JSON.parse(r.value) });
+      store.set(r.key, { at: r.at, expires: r.expires, value: decodeCacheValue(r.value) });
       n++;
     } catch {
       // a broken row is skipped; the next request refills it

@@ -91,6 +91,28 @@ describe('кэш ответов Search Console', () => {
       expect(attachGscCacheStore(db)).toBe(0);
     });
 
+    it('Map и Set переживают перезапуск (страны сайтов, сводки ключей)', async () => {
+      attachGscCacheStore(db);
+      const geos = new Map([['futcoins.eu', ['usa', 'ita']], ['fut-coin.de', ['deu']]]);
+      await gscCached('geos:28', async () => geos);
+      await gscCached('qhosts:28', async () => new Map([['fc coins', [{ host: 'a', page: 'p' }]]]));
+      await gscCached('set', async () => ({ s: new Set(['x']), d: new Date(0), list: [1, 2] }));
+      detachGscCacheStore();
+      gscCacheInvalidate();
+      attachGscCacheStore(db);
+      const f = vi.fn(async () => new Map());
+      const back = (await gscCached('geos:28', f)) as Map<string, string[]>;
+      expect(back).toBeInstanceOf(Map);
+      expect(back.get('futcoins.eu')).toEqual(['usa', 'ita']);
+      const q = (await gscCached('qhosts:28', f)) as Map<string, unknown[]>;
+      expect(q.get('fc coins')).toEqual([{ host: 'a', page: 'p' }]);
+      const o = (await gscCached('set', f)) as unknown as { s: Set<string>; d: Date; list: number[] };
+      expect(o.s.has('x')).toBe(true);
+      expect(o.d.getTime()).toBe(0);
+      expect(o.list).toEqual([1, 2]);
+      expect(f).not.toHaveBeenCalled();
+    });
+
     it('сброс по началу ключа чистит и базу', async () => {
       attachGscCacheStore(db);
       await gscCached('sites:a', async () => ['x']);
