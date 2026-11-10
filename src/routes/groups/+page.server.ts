@@ -133,6 +133,23 @@ export const actions: Actions = {
       return fail(400, { error: (e as Error).message });
     }
   },
+  // Отмеченные галочками строки ТЗ — убрать разом.
+  removeItems: async ({ request, locals }) => {
+    requireAdmin(locals);
+    const form = await request.formData();
+    const id = groupId(form);
+    if (!id) return fail(400, { error: 'Нет группы' });
+    const items = form.getAll('item').map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    if (!items.length) return fail(400, { error: 'Ничего не отмечено' });
+    try {
+      db().transaction(() => {
+        for (const it of items) removeGroupItemById(db(), id, it);
+      })();
+    } catch (e) {
+      return fail(400, { error: (e as Error).message });
+    }
+    return { removed: items.length };
+  },
   create: async ({ request, locals }) => {
     requireAdmin(locals);
     const form = await request.formData();
