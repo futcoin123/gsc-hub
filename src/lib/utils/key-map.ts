@@ -62,17 +62,17 @@ export function mapGeo(country: string): string {
  * Коротко для строки сайта: главные ключи (у каждого — страна и папка, нужны,
  * когда главных несколько: сайт с языковыми папками) и сколько второстепенных.
  */
-export function mapSummary(pages: MapPage[]): { main: { key: string; geo: string; url: string }[]; secondary: number } {
-  const main: { key: string; geo: string; url: string }[] = [];
+export function mapSummary(pages: MapPage[]): { main: { key: string; geo: string; cc: string; url: string }[]; secondary: number } {
+  const main: { key: string; geo: string; cc: string; url: string }[] = [];
   for (const p of pages) {
     if (p.role !== 'main' || main.some((m) => m.key === p.key && m.url === p.url)) continue;
-    main.push({ key: p.key, geo: mapGeo(p.country), url: p.url });
+    main.push({ key: p.key, geo: mapGeo(p.country), cc: p.country, url: p.url });
   }
   return { main, secondary: pages.filter((p) => p.role === 'secondary').length };
 }
 
-/** Подпись главного ключа: у сайта с несколькими главными — со страной в скобках. */
-export const mainLabel = (m: { key: string; geo: string }, many: boolean) => (many ? `${m.key} (${m.geo})` : m.key);
+/** Подпись главного ключа: у сайта с несколькими главными — с коротким кодом страны: «fifa coins (NL)». */
+export const mainLabel = (m: { key: string; cc: string }, many: boolean) => (many ? `${m.key} (${m.cc})` : m.key);
 
 /** Страницы карты, ни один ключ которых не встретился среди запросов сайта за период. */
 export function missingKeys(pages: MapPage[], queries: string[]): MapPage[] {

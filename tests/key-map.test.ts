@@ -92,12 +92,12 @@ describe('пометки у ключей', () => {
   it('сводка и ключи без показов', () => {
     expect(mapSummary(pages)).toEqual({
       main: [
-        { key: 'fifa coins', geo: 'Netherlands', url: '/nl/' },
-        { key: 'fifa coins kaufen', geo: 'Germany', url: '/' }
+        { key: 'fifa coins', geo: 'Netherlands', cc: 'NL', url: '/nl/' },
+        { key: 'fifa coins kaufen', geo: 'Germany', cc: 'DE', url: '/' }
       ],
       secondary: 2
     });
-    expect(mainLabel(mapSummary(pages).main[0], true)).toBe('fifa coins (Netherlands)');
+    expect(mainLabel(mapSummary(pages).main[0], true)).toBe('fifa coins (NL)');
     expect(mainLabel(mapSummary(pages).main[0], false)).toBe('fifa coins');
     expect(missingKeys(pages, ['fifa coin kaufen', 'fifa coins']).map((p) => p.url)).toEqual(['/x/']);
   });

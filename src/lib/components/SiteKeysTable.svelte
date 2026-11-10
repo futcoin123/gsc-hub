@@ -91,7 +91,7 @@
     const map = keyMap ?? [];
     const mains = map.filter((p) => p.role === 'main');
     // У сайта с языковыми папками рядом с ключом — страна (как в «Карте ключей»).
-    const geoOf = (country: string) => (mains.length > 1 ? mapGeo(country) : null);
+    const geoOf = (country: string) => (mains.length > 1 ? country : null);
     const push = (page: string | null, variant: NakedVariant, role: NakedRow['role'], key: string | null, geo: string | null) => {
       if (!page || seen.has(page + '|' + variant)) return;
       seen.add(page + '|' + variant);
@@ -231,7 +231,7 @@
     {#if keyMap}
       {@const main = keyMap.filter((p) => p.role === 'main')}
       <p class="mb-1 text-xs text-ink-2">
-        Карта ключей FUT: главный {#each main as p, i (p.country + p.url)}{i ? ', ' : ''}<span class="badge badge-ok" title="Главная {p.url} · {mapGeo(p.country)}">{main.length > 1 ? `${p.key} (${mapGeo(p.country)})` : p.key}</span>{/each}{#if !main.length}—{/if}
+        Карта ключей FUT: главный {#each main as p, i (p.country + p.url)}{i ? ', ' : ''}<span class="badge badge-ok" title="Главная {p.url} · {mapGeo(p.country)}">{main.length > 1 ? `${p.key} (${p.country})` : p.key}</span>{/each}{#if !main.length}—{/if}
         · второстепенных {keyMap.length - main.length}
         {#if notFound.length}
           · <span class="text-warn" title="Ни одного показа в Google за период по этим ключам карты (и их вариантам)">нет в Google за период: {notFound.map((p) => `${p.key}${p.role === 'main' ? ' (главный)' : ''}`).join(', ')}</span>
