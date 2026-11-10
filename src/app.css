@@ -338,11 +338,17 @@
   .app-table.is-roomy > tbody > tr.is-alt {
     @apply bg-line-soft/70;
   }
-  .app-table.is-roomy > tbody > tr:hover {
-    @apply bg-acc-t/50;
-  }
   .app-table.is-roomy > tbody > tr.is-selected {
-    @apply bg-acc-t/70;
+    @apply bg-acc-t/60;
+  }
+  /* Строка сайта под мышкой: заметный голубой и синяя полоса слева, чтобы
+     глазами не искать, какая строка (просьба владелицы 10.11.2026). */
+  .app-table.is-roomy > tbody > tr.is-site:hover {
+    @apply bg-acc-t;
+  }
+  .app-table.is-roomy > tbody > tr.is-site:hover > td:first-child {
+    box-shadow: inset 3px 0 0 rgb(var(--acc));
+    color: rgb(var(--acc));
   }
 
   /* Строка «Итого» над сайтами: свой цвет, чтобы не путать с сайтом. */

@@ -306,7 +306,7 @@
               <td class="num app-num">{pct(totals.v ? totals.s / totals.v : null)}</td>
             </tr>
             {#each sites as s, i (s.host)}
-              <tr class="cursor-pointer" class:is-alt={i % 2 === 1} class:is-selected={open.has(s.host)} onclick={() => toggle(s.host)}>
+              <tr class="is-site cursor-pointer" class:is-alt={i % 2 === 1} class:is-selected={open.has(s.host)} onclick={() => toggle(s.host)}>
                 <td class="pii font-semibold text-ink">
                   <span class="flex items-center gap-1">
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(s.host) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
