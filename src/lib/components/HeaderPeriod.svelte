@@ -17,6 +17,9 @@
     }
   });
   const fd = (iso: string) => iso.split('-').reverse().join('.');
+  // Быстрые кнопки прямо в шапке; остальные периоды и свои даты — в меню.
+  const QUICK: [string, string][] = [['today', 'Сегодня'], ['yesterday', 'Вчера'], ['7', '7 дней']];
+  const quick = $derived(!!period && QUICK.some(([k]) => k === period.key));
   const label = $derived(
     !period ? '…' : PRESETS.find(([k]) => k === period.key)?.[1] ?? `${fd(period.startDate)} – ${fd(period.endDate)}`
   );
@@ -41,14 +44,26 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') open = false; }} />
 
-<div class="relative">
+<div class="relative flex items-center gap-1">
+  <div class="app-segmented rounded border border-line p-px max-sm:hidden" role="group" aria-label="Быстрый выбор периода">
+    {#each QUICK as [k, l] (k)}
+      <button
+        type="button"
+        class:is-active={period?.key === k}
+        aria-pressed={period?.key === k}
+        disabled={busy}
+        title={period?.key === k ? `Период всех отчётов: ${fd(period.startDate)} – ${fd(period.endDate)}` : `Показать все отчёты за период «${l}»`}
+        onclick={() => choose(k)}
+      >{l}</button>
+    {/each}
+  </div>
   <button
     type="button"
-    class="btn btn-sm bg-acc-t text-acc hover:brightness-95"
+    class="btn btn-sm {quick ? 'btn-ghost max-sm:bg-acc-t max-sm:text-acc' : 'bg-acc-t text-acc hover:brightness-95'}"
     aria-expanded={open}
-    title={period ? `Период всех отчётов: ${fd(period.startDate)} – ${fd(period.endDate)}` : 'Период отчётов'}
+    title={period ? `Период всех отчётов: ${fd(period.startDate)} – ${fd(period.endDate)}. Другие периоды и свои даты — здесь` : 'Период отчётов'}
     onclick={() => (open = !open)}
-  >Период: <b>{label}</b></button>
+  >{#if quick}<span class="max-sm:hidden">Другой…</span><span class="sm:hidden">Период: <b>{label}</b></span>{:else}Период: <b>{label}</b>{/if}</button>
   {#if open}
     <button type="button" class="fixed inset-0 z-40 cursor-default" aria-label="Закрыть" onclick={() => (open = false)}></button>
     <div class="absolute right-0 top-full z-50 mt-1 w-72 rounded border border-line bg-pane p-2 text-xs shadow-[0_6px_20px_-6px_rgb(19_23_34/0.25)]">
