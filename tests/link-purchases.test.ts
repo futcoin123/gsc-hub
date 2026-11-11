@@ -65,6 +65,24 @@ describe('закупки из групп', () => {
     expect(m.get(b)).toEqual({ date: '2026-11-10', links: {} });
   });
 
+  it('ссылки на сайт в группе ставят сайт в группу (галочка «В группу»)', () => {
+    const g = createSiteGroup(db, '10-11-26');
+    addGroupItem(db, g, { siteUrl: 'sc-domain:fccoins.co.uk', query: 'buy fc coins', page: 'https://fccoins.co.uk/', qty: 35 });
+    addNakedItem(db, g, 'https://www.futcoin.es/', 'https://www.futcoin.es/', 1);
+    const hosts = (db.prepare('SELECT host FROM site_group_hosts WHERE group_id = ? ORDER BY host').all(g) as { host: string }[]).map((r) => r.host);
+    expect(hosts).toEqual(['fccoins.co.uk', 'futcoin.es']);
+  });
+
+  it('старые группы: сайты со ссылками дописываются в группу при запуске', () => {
+    const g = createSiteGroup(db, '09-11-26');
+    db.prepare("INSERT INTO site_group_items (group_id, site_url, query, page, added_at, qty, kind) VALUES (?, 'sc-domain:fccoins.co.uk', 'buy fc coins', 'https://fccoins.co.uk/', 0, 5, 'anchor')").run(g);
+    db.prepare('DELETE FROM site_group_hosts WHERE group_id = ?').run(g);
+    db.prepare("DELETE FROM schema_marks WHERE name = 'group-hosts-from-items'").run();
+    db.close();
+    db = openDb(join(dir, 'test.db'));
+    expect(db.prepare('SELECT host FROM site_group_hosts WHERE group_id = ?').all(g)).toEqual([{ host: 'fccoins.co.uk' }]);
+  });
+
   it('коротко, что купили', () => {
     const it = (query: string, qty: number, kind: 'anchor' | 'naked' = 'anchor') => ({ id: 1, groupId: 1, siteUrl: 's', query, page: 'p', position: null, impressions: null, clicks: null, ctr: null, addedAt: 0, qty, kind });
     expect(itemsLabel([it('a', 1), it('b', 3), it('c', 1), it('d', 1), it('e', 1), it('', 2, 'naked')])).toBe('b ×3, a, c, d, ещё 1, безанкор ×2');

@@ -1,4 +1,5 @@
 import { foldQuery, hostKey } from '$lib/utils/fold-query';
+import { siteHostname } from '$lib/utils/url-filters';
 import type { Db } from './db';
 import { nakedQuery, nakedAnchor, nakedVariant, NAKED_LABEL, type NakedVariant } from '$lib/utils/naked';
 
@@ -58,6 +59,21 @@ function requireOpen(db: Db, groupId: number): void {
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+/**
+ * Ссылки на сайт в группе — значит, сайт в этой группе: ставим его в список
+ * сайтов группы (галочка «В группу»). Раньше сайт попадал туда только кнопкой
+ * «+», и у сайта с 35 ссылками в группе стояло «+», будто его там нет.
+ */
+function joinSite(db: Db, groupId: number, siteUrl: string): void {
+  let host = '';
+  try {
+    host = siteHostname(siteUrl);
+  } catch {
+    return;
+  }
+  if (host) db.prepare('INSERT OR IGNORE INTO site_group_hosts (group_id, host, added_at) VALUES (?, ?, ?)').run(groupId, host, Date.now());
+}
+
 export function addGroupItem(db: Db, groupId: number, item: NewItem): void {
   requireOpen(db, groupId);
   if (!item.query?.trim() || !item.page?.trim() || !item.siteUrl?.trim()) throw new Error('Нужны сайт, ключ и страница');
@@ -65,6 +81,7 @@ export function addGroupItem(db: Db, groupId: number, item: NewItem): void {
     `INSERT INTO site_group_items (group_id, site_url, query, page, position, impressions, clicks, ctr, added_at, qty, kind)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'anchor') ON CONFLICT (group_id, page, query) DO NOTHING`
   ).run(groupId, item.siteUrl, item.query, item.page, num(item.position), num(item.impressions), num(item.clicks), num(item.ctr), Date.now(), cleanQty(item.qty ?? 1));
+  joinSite(db, groupId, item.siteUrl);
 }
 
 /**
@@ -87,6 +104,7 @@ export function addNakedItem(db: Db, groupId: number, siteUrl: string, page: str
      VALUES (?, ?, ?, ?, ?, ?, 'naked')
      ON CONFLICT (group_id, page, query) DO UPDATE SET qty = MIN(qty + excluded.qty, ${QTY_MAX})`
   ).run(groupId, siteUrl, nakedQuery(variant), url.href, Date.now(), cleanQty(qty));
+  joinSite(db, groupId, siteUrl);
 }
 
 /** Изменить количество ссылок у связки. */

@@ -427,6 +427,24 @@ export function openDb(path: string): Db {
       db.prepare("INSERT INTO schema_marks (name) VALUES ('gsc-cache-v2')").run();
     })();
   }
+  // Сайты, на которые в группе уже есть ссылки, — в список сайтов группы
+  // (раньше туда попадали только кнопкой «+»).
+  if (!db.prepare("SELECT 1 FROM schema_marks WHERE name = 'group-hosts-from-items'").get()) {
+    db.transaction(() => {
+      const rows = db.prepare('SELECT DISTINCT group_id, site_url FROM site_group_items').all() as { group_id: number; site_url: string }[];
+      const ins = db.prepare('INSERT OR IGNORE INTO site_group_hosts (group_id, host, added_at) VALUES (?, ?, ?)');
+      for (const r of rows) {
+        const raw = r.site_url.startsWith('sc-domain:') ? `https://${r.site_url.slice(10)}/` : r.site_url;
+        try {
+          const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+          if (host) ins.run(r.group_id, host, Date.now());
+        } catch {
+          // битый адрес — пропускаем
+        }
+      }
+      db.prepare("INSERT INTO schema_marks (name) VALUES ('group-hosts-from-items')").run();
+    })();
+  }
   if (!db.prepare("SELECT 1 FROM schema_marks WHERE name = 'counter-v2'").get()) {
     db.transaction(() => {
       db.exec('DELETE FROM button_clicks; DELETE FROM page_time;');
