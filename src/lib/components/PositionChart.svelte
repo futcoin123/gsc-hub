@@ -3,7 +3,9 @@
   // внизу). Наведение — цифры дня в строке над графиком, поверх данных ничего.
   import { SERIES } from '$lib/chart-theme';
   type Point = { date: string; clicks: number; impressions: number; position: number | null };
-  let { points, height = 180 }: { points: Point[]; height?: number } = $props();
+  // Пометки (закупки ссылок, склейки): вертикальная линия в этот день.
+  type Mark = { date: string; label: string; color: string };
+  let { points, height = 180, events = [] }: { points: Point[]; height?: number; events?: Mark[] } = $props();
 
   let width = $state(640);
   const M = { top: 10, right: 40, bottom: 20, left: 8 };
@@ -42,6 +44,9 @@
     hover = n ? Math.max(0, Math.min(n - 1, Math.round((px / innerW) * (n - 1)))) : null;
   }
   const shownPoint = $derived(hover !== null ? points[hover] : null);
+  const idxOf = (date: string) => points.findIndex((p) => p.date === date);
+  const marks = $derived(events.map((e) => ({ ...e, i: idxOf(e.date) })).filter((e) => e.i >= 0));
+  const marksOnHover = $derived(hover === null ? [] : marks.filter((m) => m.i === hover));
   const avgPos = $derived.by(() => {
     let w = 0, s = 0;
     for (const p of points) if (p.position !== null && p.impressions) { s += p.position * p.impressions; w += p.impressions; }
@@ -53,9 +58,10 @@
   <div class="mb-1 flex flex-wrap items-center gap-3 text-ink-2">
     <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full bg-ink"></i>Средняя позиция</span>
     <span class="flex items-center gap-1"><i class="inline-block h-2 w-2 rounded-sm" style:background={SERIES.clicks}></i>Клики</span>
+    {#if marks.length}<span class="flex items-center gap-1" title={marks.map((m) => `${dm(m.date)}: ${m.label}`).join('\n')}><i class="inline-block h-3 w-0.5" style:background={marks[0].color}></i>Закупки ссылок ({marks.length})</span>{/if}
     <span class="text-ink-3">
       {#if shownPoint}
-        {dm(shownPoint.date)}: позиция {shownPoint.position === null ? '— (не показывался)' : shownPoint.position.toFixed(1)} · клики {shownPoint.clicks} · показы {shownPoint.impressions}
+        {dm(shownPoint.date)}: позиция {shownPoint.position === null ? '— (не показывался)' : shownPoint.position.toFixed(1)} · клики {shownPoint.clicks} · показы {shownPoint.impressions}{#each marksOnHover as m (m.label)}<b class="ml-1" style:color={m.color}>· {m.label}</b>{/each}
       {:else}
         За период: средняя позиция {avgPos === null ? '—' : avgPos.toFixed(1)} · наведите на день, чтобы увидеть его цифры
       {/if}
@@ -82,6 +88,11 @@
           {#if p.position !== null}<circle cx={x(i)} cy={y(p.position)} r={hover === i ? 3.5 : 2.2} fill="currentColor" />{/if}
         {/each}
       </g>
+      <!-- закупки ссылок и другие события: линия и флажок наверху -->
+      {#each marks as m (m.date + m.label)}
+        <line x1={x(m.i)} x2={x(m.i)} y1={M.top - 6} y2={height - M.bottom} stroke={m.color} stroke-width="1.5" stroke-dasharray="4 2" opacity="0.9"><title>{dm(m.date)}: {m.label}</title></line>
+        <path d="M{x(m.i)},{M.top - 8} l7,3 l-7,3 z" fill={m.color}><title>{dm(m.date)}: {m.label}</title></path>
+      {/each}
       {#if hover !== null}<line x1={x(hover)} x2={x(hover)} y1={M.top} y2={height - M.bottom} class="text-ink-4" stroke="currentColor" stroke-dasharray="3 3" />{/if}
       <!-- даты -->
       <g class="text-ink-3" fill="currentColor" font-size="10">

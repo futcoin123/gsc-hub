@@ -1,0 +1,123 @@
+// Закупки ссылок из групп («10-11-26») — для графиков и отчёта «Закупки».
+//
+// Дата закупки: когда группу зафиксировали (ТЗ ушло исполнителю), иначе дата
+// в названии группы (дд-мм-гг), иначе когда группу создали. Время — по Берлину.
+import type { Db } from './db';
+import { localToday } from './gsc-calendar';
+import { listGroupItems, type GroupItem } from './group-items';
+import { nakedAnchor } from '$lib/utils/naked';
+
+export interface GroupPurchase {
+  groupId: number;
+  name: string;
+  /** YYYY-MM-DD */
+  date: string;
+  fixed: boolean;
+  items: GroupItem[];
+}
+
+/** «10-11-26» → 2026-11-10; не дата — null. */
+export function dateFromGroupName(name: string): string | null {
+  const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec(name.trim());
+  if (!m) return null;
+  const iso = `20${m[3]}-${m[2]}-${m[1]}`;
+  const d = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
+}
+
+export function purchaseDate(g: { name: string; created_at: number; fixed_at: number | null }): string {
+  if (g.fixed_at) return localToday(g.fixed_at);
+  return dateFromGroupName(g.name) ?? localToday(g.created_at);
+}
+
+/** Группы, в которых есть ссылки, новые сверху. */
+export function listGroupPurchases(db: Db): GroupPurchase[] {
+  const groups = db
+    .prepare(
+      `SELECT id, name, created_at, fixed_at FROM site_groups g
+        WHERE EXISTS (SELECT 1 FROM site_group_items i WHERE i.group_id = g.id)`
+    )
+    .all() as { id: number; name: string; created_at: number; fixed_at: number | null }[];
+  return groups
+    .map((g) => ({ groupId: g.id, name: g.name, date: purchaseDate(g), fixed: g.fixed_at !== null, items: listGroupItems(db, g.id) }))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.groupId - a.groupId);
+}
+
+const hostOf = (siteUrl: string) => {
+  const raw = siteUrl.startsWith('sc-domain:') ? `https://${siteUrl.slice(10)}/` : siteUrl;
+  try {
+    return new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+/** Коротко, что купили: «fc 27 coins ×3, fut coins, безанкор ×4». */
+export function itemsLabel(items: GroupItem[], max = 4): string {
+  const anchors = new Map<string, number>();
+  let naked = 0;
+  for (const i of items) {
+    if (i.kind === 'naked') naked += i.qty;
+    else anchors.set(i.query, (anchors.get(i.query) ?? 0) + i.qty);
+  }
+  const parts = [...anchors].sort((a, b) => b[1] - a[1]).map(([q, n]) => (n > 1 ? `${q} ×${n}` : q));
+  const shown = parts.slice(0, max);
+  if (parts.length > max) shown.push(`ещё ${parts.length - max}`);
+  if (naked) shown.push(naked > 1 ? `безанкор ×${naked}` : 'безанкор');
+  return shown.join(', ');
+}
+
+export interface PurchaseMark {
+  id: number;
+  host: string;
+  date: string;
+  groupId: number;
+  name: string;
+  links: number;
+  label: string;
+}
+
+/** Одна пометка на график на группу и сайт. */
+export function groupPurchaseMarks(db: Db, purchases = listGroupPurchases(db)): PurchaseMark[] {
+  const out: PurchaseMark[] = [];
+  for (const p of purchases) {
+    const bySite = new Map<string, GroupItem[]>();
+    for (const i of p.items) {
+      const h = hostOf(i.siteUrl);
+      if (h) bySite.set(h, [...(bySite.get(h) ?? []), i]);
+    }
+    for (const [host, items] of bySite) {
+      const links = items.reduce((a, i) => a + i.qty, 0);
+      out.push({
+        id: -(1_000_000_000 + p.groupId),
+        host,
+        date: p.date,
+        groupId: p.groupId,
+        name: p.name,
+        links,
+        label: `Закупка ${p.name}: ${links} ссыл. (${itemsLabel(items)})`
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Пометки для графика одного ключа: закупки, где брали этот анкор на этом
+ * сайте, или безанкорные ссылки на эту страницу.
+ */
+export function keywordPurchaseMarks(db: Db, siteUrl: string, query: string, page: string | null): PurchaseMark[] {
+  const host = hostOf(siteUrl);
+  const q = query.trim().toLowerCase();
+  const out: PurchaseMark[] = [];
+  for (const p of listGroupPurchases(db)) {
+    const hit = p.items.filter(
+      (i) => hostOf(i.siteUrl) === host && ((i.kind === 'anchor' && i.query.trim().toLowerCase() === q) || (i.kind === 'naked' && page !== null && i.page === page))
+    );
+    if (!hit.length) continue;
+    const links = hit.reduce((a, i) => a + i.qty, 0);
+    const what = hit.map((i) => (i.kind === 'naked' ? `безанкор ${nakedAnchor(i.page, i.query)}` : `анкор «${i.query}»`)).join(', ');
+    out.push({ id: -(1_000_000_000 + p.groupId), host, date: p.date, groupId: p.groupId, name: p.name, links, label: `Закупка ${p.name}: ${links} ссыл. — ${what}` });
+  }
+  return out;
+}

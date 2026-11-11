@@ -42,34 +42,36 @@
 
   // Графики по дням: сайт целиком и отдельный ключ (ключ + страница).
   type Pt = { date: string; clicks: number; impressions: number; position: number | null };
+  type Ev = { date: string; label: string; color: string };
   const multiDay = $derived(period !== 'today' && period !== 'yesterday');
-  let siteChart = $state<{ loading: boolean; points: Pt[]; err: string | null }>({ loading: false, points: [], err: null });
+  let siteChart = $state<{ loading: boolean; points: Pt[]; events: Ev[]; err: string | null }>({ loading: false, points: [], events: [], err: null });
   let showSiteChart = $state(true);
   let kwOpen = $state<string | null>(null);
-  let kwCharts = $state<Record<string, { loading: boolean; points: Pt[]; err: string | null }>>({});
-  async function fetchDaily(extra: string): Promise<Pt[]> {
+  let kwCharts = $state<Record<string, { loading: boolean; points: Pt[]; events: Ev[]; err: string | null }>>({});
+  async function fetchDaily(extra: string): Promise<{ points: Pt[]; events: Ev[] }> {
     const r = await fetch(`/keywords/daily?site=${encodeURIComponent(siteUrl)}&acc=${encodeURIComponent(accountId)}${extra}`);
     if (!r.ok) throw new Error((await r.text()).slice(0, 200) || `HTTP ${r.status}`);
-    return (await r.json()).points ?? [];
+    const j = await r.json();
+    return { points: j.points ?? [], events: j.events ?? [] };
   }
   async function loadSiteChart() {
     if (!multiDay) return;
-    siteChart = { loading: true, points: [], err: null };
+    siteChart = { loading: true, points: [], events: [], err: null };
     try {
-      siteChart = { loading: false, points: await fetchDaily(''), err: null };
+      siteChart = { loading: false, ...(await fetchDaily('')), err: null };
     } catch (e) {
-      siteChart = { loading: false, points: [], err: (e as Error).message };
+      siteChart = { loading: false, points: [], events: [], err: (e as Error).message };
     }
   }
   async function toggleKw(r: Row) {
     const k = r.page + '\n' + r.query;
     kwOpen = kwOpen === k ? null : k;
     if (kwOpen === null || kwCharts[k]) return;
-    kwCharts[k] = { loading: true, points: [], err: null };
+    kwCharts[k] = { loading: true, points: [], events: [], err: null };
     try {
-      kwCharts[k] = { loading: false, points: await fetchDaily(`&q=${encodeURIComponent(r.query)}&page=${encodeURIComponent(r.page)}`), err: null };
+      kwCharts[k] = { loading: false, ...(await fetchDaily(`&q=${encodeURIComponent(r.query)}&page=${encodeURIComponent(r.page)}`)), err: null };
     } catch (e) {
-      kwCharts[k] = { loading: false, points: [], err: (e as Error).message };
+      kwCharts[k] = { loading: false, points: [], events: [], err: (e as Error).message };
     }
   }
   let loading = $state(true);
@@ -280,7 +282,7 @@
       {#if showSiteChart}
         {#if siteChart.loading}<p class="loading text-xs">Загружаю график…</p>
         {:else if siteChart.err}<p class="text-xs text-bad">График не загрузился: {siteChart.err}</p>
-        {:else if siteChart.points.some((p) => p.position !== null)}<PositionChart points={siteChart.points} />
+        {:else if siteChart.points.some((p) => p.position !== null)}<PositionChart points={siteChart.points} events={siteChart.events} />
         {:else}<p class="text-xs text-ink-3">За этот период показов в Google нет.</p>{/if}
       {/if}
     </div>
@@ -347,7 +349,7 @@
                   <div class="mb-1 text-xs font-semibold text-ink-2">«{r.query}» на {pathOf(r.page)} — по дням</div>
                   {#if !c || c.loading}<p class="loading text-xs">Загружаю график…</p>
                   {:else if c.err}<p class="text-xs text-bad">График не загрузился: {c.err}</p>
-                  {:else if c.points.some((p) => p.position !== null)}<PositionChart points={c.points} height={150} />
+                  {:else if c.points.some((p) => p.position !== null)}<PositionChart points={c.points} events={c.events} height={150} />
                   {:else}<p class="text-xs text-ink-3">По дням данных нет: Google показывает этот ключ слишком редко.</p>{/if}
                 </td>
               </tr>

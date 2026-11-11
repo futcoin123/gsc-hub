@@ -1,0 +1,82 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { openDb, type Db } from '../src/lib/server/db';
+import { createSiteGroup } from '../src/lib/server/site-groups';
+import { addGroupItem, addNakedItem, setGroupFixed } from '../src/lib/server/group-items';
+import { dateFromGroupName, listGroupPurchases, groupPurchaseMarks, keywordPurchaseMarks, itemsLabel } from '../src/lib/server/link-purchases';
+import { listSiteEventsForSite } from '../src/lib/server/site-events';
+import { windows, sumWindow } from '../src/lib/server/purchase-effect';
+
+describe('закупки из групп', () => {
+  let dir: string;
+  let db: Db;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'gsc-hub-'));
+    db = openDb(join(dir, 'test.db'));
+  });
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const item = (query: string, page = 'https://futcoins.eu/', qty = 1) => ({ siteUrl: 'sc-domain:futcoins.eu', query, page, qty });
+
+  it('дата закупки: из названия группы, а после фиксации — день фиксации', () => {
+    expect(dateFromGroupName('10-11-26')).toBe('2026-11-10');
+    expect(dateFromGroupName('31-02-26')).toBeNull();
+    expect(dateFromGroupName('Испания')).toBeNull();
+    const g = createSiteGroup(db, '10-11-26');
+    addGroupItem(db, g, item('fc 27 coins', 'https://futcoins.eu/', 3));
+    expect(listGroupPurchases(db)[0].date).toBe('2026-11-10');
+    setGroupFixed(db, g, true);
+    expect(listGroupPurchases(db)[0].fixed).toBe(true);
+  });
+
+  it('пометки на графике: по сайту — все ссылки, по ключу — только этот анкор', () => {
+    const g = createSiteGroup(db, '10-11-26');
+    addGroupItem(db, g, item('fc 27 coins', 'https://futcoins.eu/', 3));
+    addGroupItem(db, g, item('fut coins'));
+    addNakedItem(db, g, 'sc-domain:futcoins.eu', 'https://futcoins.eu/it/', 2, 'domain');
+    createSiteGroup(db, '11-11-26'); // пустая группа — не закупка
+    const marks = groupPurchaseMarks(db);
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toMatchObject({ host: 'futcoins.eu', date: '2026-11-10', links: 6 });
+    expect(marks[0].label).toBe('Закупка 10-11-26: 6 ссыл. (fc 27 coins ×3, fut coins, безанкор ×2)');
+    // Те же закупки — в событиях сайта (графики Dashboard и страницы сайта).
+    const ev = listSiteEventsForSite(db, 'sc-domain:futcoins.eu');
+    expect(ev.map((e) => [e.date, e.type, e.orderHref])).toEqual([['2026-11-10', 'link_purchase', `/groups?g=${g}`]]);
+    // По ключу.
+    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'FC 27 coins', 'https://futcoins.eu/')[0].label).toBe('Закупка 10-11-26: 3 ссыл. — анкор «fc 27 coins»');
+    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fifa coins', 'https://futcoins.eu/it/')[0].label).toContain('безанкор futcoins.eu/it/');
+    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fifa coins', 'https://futcoins.eu/')).toEqual([]);
+    expect(keywordPurchaseMarks(db, 'sc-domain:other.com', 'fc 27 coins', null)).toEqual([]);
+  });
+
+  it('коротко, что купили', () => {
+    const it = (query: string, qty: number, kind: 'anchor' | 'naked' = 'anchor') => ({ id: 1, groupId: 1, siteUrl: 's', query, page: 'p', position: null, impressions: null, clicks: null, ctr: null, addedAt: 0, qty, kind });
+    expect(itemsLabel([it('a', 1), it('b', 3), it('c', 1), it('d', 1), it('e', 1), it('', 2, 'naked')])).toBe('b ×3, a, c, d, ещё 1, безанкор ×2');
+  });
+});
+
+describe('до и после закупки', () => {
+  it('окна: 7 дней до, после — со следующего дня по последний полный день (до 28)', () => {
+    const now = Date.parse('2026-11-12T12:00:00Z'); // последний полный день Google — 11.11
+    expect(windows('2026-11-10', now)).toEqual({
+      before: { start: '2026-11-03', end: '2026-11-09', days: 7 },
+      after: { start: '2026-11-11', end: '2026-11-11', days: 1 }
+    });
+    expect(windows('2026-11-11', now).after).toBeNull(); // ещё рано
+    expect(windows('2026-09-01', now).after).toEqual({ start: '2026-09-02', end: '2026-09-29', days: 28 });
+  });
+  it('сумма окна: позиция — средняя по показам', () => {
+    const rows = [
+      { date: '2026-11-03', clicks: 1, impressions: 10, position: 20 },
+      { date: '2026-11-04', clicks: 0, impressions: 30, position: 10 },
+      { date: '2026-11-11', clicks: 5, impressions: 40, position: 5 }
+    ];
+    expect(sumWindow(rows, { start: '2026-11-03', end: '2026-11-09', days: 7 })).toEqual({ clicks: 1, impressions: 40, position: 12.5 });
+    expect(sumWindow(rows, { start: '2026-11-12', end: '2026-11-20', days: 9 })).toEqual({ clicks: 0, impressions: 0, position: null });
+  });
+});

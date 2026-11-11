@@ -6,6 +6,8 @@ import { requireAdmin } from '$lib/server/guard';
 import { getAccount } from '$lib/server/accounts';
 import { searchAnalyticsQuery, type DimensionFilter } from '$lib/server/google';
 import { addCalendarDays } from '$lib/server/gsc-calendar';
+import { listSiteEventsForSite, SITE_EVENT_TYPES } from '$lib/server/site-events';
+import { keywordPurchaseMarks } from '$lib/server/link-purchases';
 
 /**
  * Сайт (или один ключ на странице) по дням за период из шапки: средняя позиция,
@@ -39,7 +41,20 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       const r = byDay.get(d);
       points.push({ date: d, clicks: r?.clicks ?? 0, impressions: r?.impressions ?? 0, position: r && r.impressions > 0 ? r.position : null });
     }
-    return json({ points, period: p });
+    // Пометки на графике: у сайта — все его события (закупки, склейки), у ключа —
+    // закупки, где брали этот анкор (или безанкорные на эту страницу).
+    const inRange = (d: string) => d >= p.startDate && d <= p.endDate;
+    let events: { date: string; label: string; color: string }[] = [];
+    try {
+      events = q
+        ? keywordPurchaseMarks(db(), site, q, page).filter((m) => inRange(m.date)).map((m) => ({ date: m.date, label: m.label, color: SITE_EVENT_TYPES.link_purchase.color }))
+        : listSiteEventsForSite(db(), site)
+            .filter((e) => inRange(e.date))
+            .map((e) => ({ date: e.date, label: e.note || SITE_EVENT_TYPES[e.type]?.label || e.type, color: SITE_EVENT_TYPES[e.type]?.color ?? '#7c3aed' }));
+    } catch {
+      events = [];
+    }
+    return json({ points, events, period: p });
   } catch (e) {
     throw error(502, (e as Error).message.slice(0, 200));
   }

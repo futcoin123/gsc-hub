@@ -362,6 +362,7 @@
           <span class="text-ink-3">Пройдено {group.done.length} из {group.hosts.length} · ключей {group.items}</span>
           <span class="ml-auto flex items-center gap-1">
             <a class="btn btn-sec btn-sm" href="/groups/{group.id}/csv">Скачать ТЗ (CSV)</a>
+            <a class="btn btn-sec btn-sm" href="/purchases?g={group.id}" title="Позиция, показы и клики до и после закупки — по сайтам и по каждому ключу">Результат закупки</a>
             {#if group.fixedAt}
               <span class="badge badge-ok">зафиксирована {new Date(group.fixedAt).toLocaleDateString('ru-RU')}</span>
               <form method="POST" action="?/unfix" use:enhance><input type="hidden" name="id" value={group.id} /><button class="btn btn-ghost btn-sm">Открыть для правок</button></form>

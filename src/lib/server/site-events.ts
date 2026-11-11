@@ -1,6 +1,7 @@
 import type { Db } from './db';
 import { hostToUnicode } from './idn';
 import { listPurchases } from './magiclinks-purchases';
+import { groupPurchaseMarks } from './link-purchases';
 
 // User-entered chart annotations for traffic events that are not Google algorithm
 // updates — domain merges (подклейка донора в сайт), migrations, anything worth a
@@ -60,8 +61,25 @@ function toEvent(r: EventRow): SiteEvent {
 
 export function listSiteEvents(db: Db): SiteEvent[] {
   const rows = db.prepare(`SELECT ${COLS} FROM site_events ORDER BY date, id`).all() as EventRow[];
-  return [...rows.map(toEvent), ...purchaseEvents(db)]
+  return [...rows.map(toEvent), ...purchaseEvents(db), ...groupEvents(db)]
     .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+}
+
+/** Закупки из групп («10-11-26»): одна пометка на группу и сайт, только для чтения. */
+function groupEvents(db: Db): SiteEvent[] {
+  try {
+    return groupPurchaseMarks(db).map((m) => ({
+      id: m.id,
+      siteHost: m.host,
+      date: m.date,
+      type: 'link_purchase' as const,
+      note: m.label,
+      addedAt: 0,
+      orderHref: `/groups?g=${m.groupId}`
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /** One marker per order and site. Read the same history as /magiclinks, so old
