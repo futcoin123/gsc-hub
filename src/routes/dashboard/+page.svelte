@@ -1,5 +1,6 @@
 <script lang="ts">
   import PeriodNote from '$lib/components/PeriodNote.svelte';
+  import { page } from '$app/state';
   import SortCaret from '$lib/components/SortCaret.svelte';
   import type { PageData } from './$types';
   import { onMount } from 'svelte';
@@ -55,6 +56,21 @@
   function loadToday() {
     return Promise.resolve();
   }
+
+  // С чем сравниваются проценты и позиция: прошлый период той же длины, сразу перед выбранным.
+  const shiftDay = (iso: string, n: number) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const fdm = (iso: string) => iso.split('-').reverse().join('.');
+  const cmpLabel = $derived.by(() => {
+    const p = (page.data as { period?: { startDate: string; endDate: string; days: number } }).period;
+    if (!p) return '';
+    const end = shiftDay(p.startDate, -1);
+    const start = shiftDay(end, -(p.days - 1));
+    return start === end ? fdm(end) : `${fdm(start)} – ${fdm(end)}`;
+  });
 
   let refreshError = $state<string | null>(null);
 
@@ -246,7 +262,7 @@
 
 {#snippet metricCell(label: string, value: string, d: number | null, invert = false)}
   <div class="flex min-w-0 flex-col">
-    <span class="text-[10px] font-medium uppercase tracking-[0.05em] text-ink-3">{label}</span>
+    <span class="text-[10px] font-medium uppercase tracking-[0.05em] text-ink-2">{label}</span>
     <span class="flex items-center gap-1 whitespace-nowrap">
       <span class="pii app-num font-semibold text-ink">{value}</span>
       {@render deltaChip(d, invert)}
@@ -256,25 +272,24 @@
 
 {#snippet metricToggle(m: 'clicks' | 'impressions' | 'position', label: string, value: string, d: number | null, kind: '%' | 'pos')}
   {@const solo = chart === m}
-  {@const faded = chart !== 'all' && !solo}
   <button
     type="button"
-    class="flex min-w-0 flex-col items-start rounded px-1 py-0.5 text-left transition-colors hover:bg-sunk {solo ? 'bg-acc-t' : ''} {faded ? 'opacity-50' : ''}"
+    class="flex min-w-0 flex-col items-start rounded px-1 py-0.5 text-left transition-colors hover:bg-sunk {solo ? 'bg-acc-t' : ''}"
     title={solo ? 'Показать на графике всё' : `Оставить на графике только: ${label.toLowerCase()}`}
     onclick={() => setChart(m)}
   >
-    <span class="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-3">
+    <span class="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-2">
       <i class="inline-block h-0.5 w-2.5 rounded-full {m === 'position' ? 'bg-ink' : ''}" style:background={m === 'clicks' ? SERIES.clicks : m === 'impressions' ? SERIES.impr : undefined}></i>{label}
     </span>
     <span class="pii app-num text-[13px] font-semibold text-ink">{value}</span>
     {#if data.comparable && d !== null && d !== 0}
       {#if kind === 'pos'}
-        <span class="pii chip {d > 0 ? 'chip-up' : 'chip-dn'}" title="К прошлому периоду: {d > 0 ? 'выше' : 'ниже'} на {Math.abs(d)}">{d > 0 ? '▲' : '▼'}{Math.abs(d)}</span>
+        <span class="pii chip {d > 0 ? 'chip-up' : 'chip-dn'}" title="К {cmpLabel || 'прошлому периоду'}: позиция {d > 0 ? 'выше' : 'ниже'} на {Math.abs(d)}">{d > 0 ? '▲' : '▼'}{Math.abs(d)}</span>
       {:else}
-        <span class="pii chip {d > 0 ? 'chip-up' : 'chip-dn'}" title="К прошлому периоду той же длины">{d > 0 ? '+' : '−'}{Math.abs(d)}%</span>
+        <span class="pii chip {d > 0 ? 'chip-up' : 'chip-dn'}" title="К {cmpLabel || 'прошлому периоду той же длины'}">{d > 0 ? '+' : '−'}{Math.abs(d)}%</span>
       {/if}
     {:else if data.comparable}
-      <span class="text-[10px] text-ink-4" title="К прошлому периоду">без изменений</span>
+      <span class="text-[10px] text-ink-2" title="К {cmpLabel || 'прошлому периоду той же длины'}">без изменений</span>
     {/if}
   </button>
 {/snippet}
@@ -426,7 +441,7 @@
       <h1 class="app-pagetitle">Dashboard</h1>
     </div>
     <div class="app-toolbar-right">
-      <PeriodNote />
+      <PeriodNote note={data.comparable && cmpLabel ? `проценты и ▲▼ — к ${cmpLabel}` : ''} />
       <span class="app-toolbar-divider" aria-hidden="true"></span>
       <div class="app-segmented">
         <span class="app-segmented-label">Sort</span>
