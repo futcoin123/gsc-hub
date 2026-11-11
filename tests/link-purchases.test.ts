@@ -47,11 +47,12 @@ describe('закупки из групп', () => {
     // Те же закупки — в событиях сайта (графики Dashboard и страницы сайта).
     const ev = listSiteEventsForSite(db, 'sc-domain:futcoins.eu');
     expect(ev.map((e) => [e.date, e.type, e.orderHref])).toEqual([['2026-11-10', 'link_purchase', `/groups?g=${g}`]]);
-    // По ключу.
-    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'FC 27 coins', 'https://futcoins.eu/')[0].label).toBe('Закупка 10-11-26: 3 ссыл. — анкор «fc 27 coins»');
-    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fifa coins', 'https://futcoins.eu/it/')[0].label).toContain('безанкор futcoins.eu/it/');
-    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fifa coins', 'https://futcoins.eu/')).toEqual([]);
-    expect(keywordPurchaseMarks(db, 'sc-domain:other.com', 'fc 27 coins', null)).toEqual([]);
+    // По ключу — закупки на страницу, где он стоит (любым анкором), а не по тексту анкора.
+    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'eafc27coins', 'https://futcoins.eu/')[0].label).toBe('Закупка 10-11-26: 4 ссыл. на эту страницу (fc 27 coins ×3, fut coins)');
+    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'crediti fifa', 'https://futcoins.eu/it/')[0].label).toBe('Закупка 10-11-26: 2 ссыл. на эту страницу (безанкор ×2)');
+    // Тот же анкор на странице другой страны — не эта закупка.
+    expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fc 27 coins', 'https://futcoins.eu/pl/')).toEqual([]);
+    expect(keywordPurchaseMarks(db, 'sc-domain:other.com', 'fc 27 coins', 'https://futcoins.eu/')).toEqual([]);
   });
 
   it('для колонки «В группу»: дата закупки и ссылки по сайтам', () => {

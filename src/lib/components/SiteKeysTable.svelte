@@ -17,7 +17,7 @@
   import { keyMarker, markTitle, missingKeys, mapGeo, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
   import { checkoutLeads, checkoutSplit } from '$lib/utils/checkout-lead';
   import { Volumes } from '$lib/volumes.svelte';
-  import { otherGroups, gi, activeGroup, itemKey, inActive, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
+  import { pageGroups, gi, activeGroup, itemKey, inActive, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
 
   type Row = { query: string; page: string; position: number; impressions: number; clicks: number; ctr: number };
   let { siteUrl, accountId, period, siteTotals = null }: { siteUrl: string; accountId: string; period: string; siteTotals?: { clicks: number; impressions: number } | null } = $props();
@@ -177,7 +177,7 @@
         return n ? (e.owners.some((o) => o.position < r.position) ? 1000 : 0) + n : null;
       }
       if (k === 'last') {
-        const l = otherGroups(r.page, r.query);
+        const l = pageGroups(r.page);
         return l.length ? l[l.length - 1].at : null;
       }
       if (k === 'group') {
@@ -313,7 +313,7 @@
             <SortTh {sort} k="ctr" label="CTR" num />
             <SortTh {sort} k="checkout" label="Оплата" num title="Переходы к оплате (на партнёрку), сделанные на странице за период — по счётчику хаба. По какому ключу пришёл посетитель, Google не сообщает, поэтому число страницы стоит один раз — у её ключа с наибольшими кликами" />
             <SortTh {sort} k="others" label="Мои другие сайты" title="Другие ваши сайты той же страны по этому ключу и ссылки на них. Красным — стоит выше" />
-            <SortTh {sort} k="last" label="Последняя закупка" />
+            <SortTh {sort} k="last" label="Последняя закупка" title="Когда в последний раз брали ссылки на страницу этого ключа (любым анкором) — по странице сайта, а не по ключу: один анкор бывает на страницах разных стран" />
             <SortTh {sort} k="group" label="В группу" num />
           </tr>
         </thead>

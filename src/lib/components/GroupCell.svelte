@@ -28,7 +28,7 @@
     value={on ? saved : (draft ?? '')}
     disabled={!!g?.fixedAt}
     aria-label="Количество ссылок"
-    title={on ? 'Сколько ссылок на этот ключ в группе' : 'Впишите, сколько ссылок, и нажмите +'}
+    title={on ? 'Сколько ссылок с этим анкором на эту страницу в группе' : 'Впишите, сколько ссылок с этим анкором на эту страницу, и нажмите +'}
     onchange={(e) => onInput(e.currentTarget.value)}
     oninput={(e) => { if (!on) onInput(e.currentTarget.value); }}
   />

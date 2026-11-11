@@ -16,7 +16,7 @@
   import LastPlanCell from '$lib/components/LastPlanCell.svelte';
   import OtherSitesCell from '$lib/components/OtherSitesCell.svelte';
   import SiteLinkHistory from '$lib/components/SiteLinkHistory.svelte';
-  import { loadGroupItems, loadCompetition, comp, gi, activeGroup, otherGroups, itemKey } from '$lib/group-items.svelte';
+  import { loadGroupItems, loadCompetition, comp, gi, activeGroup, pageGroups, itemKey } from '$lib/group-items.svelte';
   import { classifyIntent } from '$lib/utils/intent';
   import { sortStriking, type StrikingSortKey, type SortDirection } from '$lib/utils/striking-sort';
   import { Volumes } from '$lib/volumes.svelte';
@@ -174,7 +174,7 @@
       }
       if (key === 'volume') return vols.sortValue(r.query);
       if (key === 'last') {
-        const l = otherGroups(r.page, r.query);
+        const l = pageGroups(r.page);
         return l.length ? l[l.length - 1].at : null;
       }
       // group: сколько ссылок в выбранной группе
@@ -892,7 +892,7 @@
                           <th class="sort-th num" aria-sort={sortAria('ctr')}><button type="button" class="hover:text-ink" onclick={() => sortBy('ctr')}>CTR<SortCaret dir={sortArrow('ctr')} /></button></th>
                           <th class="sort-th num" aria-sort={sortAria('bought')}><button type="button" class="hover:text-ink" onclick={() => sortBy('bought')}>Куплено<SortCaret dir={sortArrow('bought')} /></button></th>
                           <th class="sort-th" aria-sort={sortAria('others')} title="Другие ваши сайты с показами по этому ключу и ссылки на них. Красным — другой сайт стоит выше"><button type="button" class="hover:text-ink" onclick={() => sortBy('others')}>Мои другие сайты<SortCaret dir={sortArrow('others')} /></button></th>
-                          <th class="sort-th" aria-sort={sortAria('last')} title="Когда на этот ключ в последний раз брали ссылки: группа, сколько, как давно"><button type="button" class="hover:text-ink" onclick={() => sortBy('last')}>Последняя закупка<SortCaret dir={sortArrow('last')} /></button></th>
+                          <th class="sort-th" aria-sort={sortAria('last')} title="Когда в последний раз брали ссылки на страницу этого ключа (любым анкором): группа, сколько, как давно"><button type="button" class="hover:text-ink" onclick={() => sortBy('last')}>Последняя закупка<SortCaret dir={sortArrow('last')} /></button></th>
                       <th class="sort-th num" aria-sort={sortAria('group')} title="Клик — добавить связку «ключ + страница» в выбранную группу"><button type="button" class="hover:text-ink" onclick={() => sortBy('group')}>В группу<SortCaret dir={sortArrow('group')} /></button></th>
                           <th class="num w-20"></th></tr>
                       </thead>

@@ -204,6 +204,31 @@ export const otherGroups = (page: string, query: string) => {
   return (gi.marks[itemKey(page, query)] ?? []).filter((m) => m.groupId !== g?.id);
 };
 
+/**
+ * Закупки ссылок на эту страницу (любым анкором и безанкорные) в других
+ * группах, от старых к новым. Ссылка ведёт на страницу, а не «на ключ»: один
+ * анкор бывает на страницах разных стран, поэтому считаем по странице.
+ */
+export const pageGroups = (page: string) => {
+  const g = activeGroup();
+  const norm = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '');
+  const target = norm(page);
+  const by = new Map<number, { groupId: number; name: string; qty: number; at: number; anchors: string[] }>();
+  for (const [k, marks] of Object.entries(gi.marks)) {
+    const i = k.indexOf('\n');
+    if (norm(k.slice(0, i)) !== target) continue;
+    const q = k.slice(i + 1);
+    for (const m of marks) {
+      if (m.groupId === g?.id) continue;
+      const cur = by.get(m.groupId) ?? { groupId: m.groupId, name: m.name, qty: 0, at: m.at, anchors: [] };
+      cur.qty += m.qty;
+      cur.anchors.push(q && q !== '[домен]' ? q : 'безанкор');
+      by.set(m.groupId, cur);
+    }
+  }
+  return [...by.values()].sort((a, b) => a.at - b.at);
+};
+
 /** Сколько ссылок стоит у связки в выбранной группе. */
 export const qtyInActive = (page: string, query: string) => {
   const g = activeGroup();

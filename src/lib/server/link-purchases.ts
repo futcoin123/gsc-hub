@@ -103,21 +103,22 @@ export function groupPurchaseMarks(db: Db, purchases = listGroupPurchases(db)): 
 }
 
 /**
- * Пометки для графика одного ключа: закупки, где брали этот анкор на этом
- * сайте, или безанкорные ссылки на эту страницу.
+ * Пометки для графика одного ключа: закупки ссылок на ту страницу сайта, где
+ * этот ключ стоит в Google (любым анкором и безанкорные). Ссылка ведёт на
+ * страницу, а не «на ключ»: один анкор бывает на страницах разных стран
+ * (futcoins.eu/nl/ и /pl/), поэтому совпадение по тексту анкора не считаем.
  */
-export function keywordPurchaseMarks(db: Db, siteUrl: string, query: string, page: string | null): PurchaseMark[] {
+export function keywordPurchaseMarks(db: Db, siteUrl: string, _query: string, page: string | null): PurchaseMark[] {
   const host = hostOf(siteUrl);
-  const q = query.trim().toLowerCase();
+  if (!page) return [];
+  const norm = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '');
+  const target = norm(page);
   const out: PurchaseMark[] = [];
   for (const p of listGroupPurchases(db)) {
-    const hit = p.items.filter(
-      (i) => hostOf(i.siteUrl) === host && ((i.kind === 'anchor' && i.query.trim().toLowerCase() === q) || (i.kind === 'naked' && page !== null && i.page === page))
-    );
+    const hit = p.items.filter((i) => hostOf(i.siteUrl) === host && norm(i.page) === target);
     if (!hit.length) continue;
     const links = hit.reduce((a, i) => a + i.qty, 0);
-    const what = hit.map((i) => (i.kind === 'naked' ? `безанкор ${nakedAnchor(i.page, i.query)}` : `анкор «${i.query}»`)).join(', ');
-    out.push({ id: -(1_000_000_000 + p.groupId), host, date: p.date, groupId: p.groupId, name: p.name, links, label: `Закупка ${p.name}: ${links} ссыл. — ${what}` });
+    out.push({ id: -(1_000_000_000 + p.groupId), host, date: p.date, groupId: p.groupId, name: p.name, links, label: `Закупка ${p.name}: ${links} ссыл. на эту страницу (${itemsLabel(hit)})` });
   }
   return out;
 }

@@ -76,17 +76,10 @@ export function sumWindow(rows: { date: string; clicks: number; impressions: num
 
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const anyOf = (xs: string[]) => `^(?:${xs.map(reEscape).join('|')})$`;
-
-const byDate = (rows: SearchAnalyticsRow[], keyIdx: number) => {
-  const m = new Map<string, { date: string; clicks: number; impressions: number; position: number }[]>();
-  for (const r of rows) {
-    const k = r.keys[keyIdx].toLowerCase();
-    const list = m.get(k) ?? [];
-    list.push({ date: r.keys[keyIdx === 0 ? 1 : 0], clicks: r.clicks, impressions: r.impressions, position: r.position });
-    m.set(k, list);
-  }
-  return m;
-};
+/** Адрес страницы без # и косой черты в конце — так сравниваем со строками Google. */
+export const normPage = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '').toLowerCase();
+/** Страницы для фильтра Google: с косой чертой в конце и без, с # после. */
+const pageRe = (pages: string[]) => `^(?:${[...new Set(pages.map((p) => reEscape(p.replace(/#.*$/, '').replace(/\/$/, ''))))].join('|')})/?(?:#.*)?$`;
 
 export async function purchaseEffect(db: Db, p: GroupPurchase, now = Date.now()): Promise<PurchaseEffect> {
   const { before, after } = windows(p.date, now);
@@ -107,28 +100,44 @@ export async function purchaseEffect(db: Db, p: GroupPurchase, now = Date.now())
       const acc = getAccount(db, accOf.get(siteUrl) ?? '');
       if (!acc) return base('сайт не найден ни в одной консоли');
       try {
-        const anchors = [...new Set(items.filter((i) => i.kind === 'anchor').map((i) => i.query))];
+        // Анкор считаем на той странице, куда ведёт ссылка: один и тот же
+        // запрос бывает на страницах разных стран (futcoins.eu/nl/ и /pl/).
+        const anchorItems = items.filter((i) => i.kind === 'anchor');
+        const anchors = [...new Set(anchorItems.map((i) => i.query))];
+        const anchorPages = [...new Set(anchorItems.map((i) => i.page))];
         const pages = [...new Set(items.filter((i) => i.kind === 'naked').map((i) => i.page))];
         const [daily, qRows, pRows] = await Promise.all([
           searchAnalyticsQuery(db, acc, siteUrl, { ...span, dimensions: ['date'], rowLimit: 1000 }),
           anchors.length
             ? searchAnalyticsQuery(db, acc, siteUrl, {
-                ...span, dimensions: ['query', 'date'], rowLimit: 25000,
-                dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator: 'includingRegex', expression: anyOf(anchors) }] }]
+                ...span, dimensions: ['query', 'page', 'date'], rowLimit: 25000,
+                dimensionFilterGroups: [{ filters: [
+                  { dimension: 'query', operator: 'includingRegex', expression: anyOf(anchors) },
+                  { dimension: 'page', operator: 'includingRegex', expression: pageRe(anchorPages) }
+                ] }]
               })
             : Promise.resolve([] as SearchAnalyticsRow[]),
           pages.length
             ? searchAnalyticsQuery(db, acc, siteUrl, {
                 ...span, dimensions: ['page', 'date'], rowLimit: 25000,
-                dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'includingRegex', expression: anyOf(pages) }] }]
+                dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'includingRegex', expression: pageRe(pages) }] }]
               })
             : Promise.resolve([] as SearchAnalyticsRow[])
         ]);
         const days = daily.map((r) => ({ date: r.keys[0], clicks: r.clicks, impressions: r.impressions, position: r.position }));
-        const q = byDate(qRows, 0);
-        const pg = byDate(pRows, 0);
+        // query + page → дни; page → дни (страницы сравниваем без # и косой черты в конце).
+        const q = new Map<string, { date: string; clicks: number; impressions: number; position: number }[]>();
+        for (const r of qRows) {
+          const k = `${r.keys[0].toLowerCase()}\n${normPage(r.keys[1])}`;
+          q.set(k, [...(q.get(k) ?? []), { date: r.keys[2], clicks: r.clicks, impressions: r.impressions, position: r.position }]);
+        }
+        const pg = new Map<string, { date: string; clicks: number; impressions: number; position: number }[]>();
+        for (const r of pRows) {
+          const k = normPage(r.keys[0]);
+          pg.set(k, [...(pg.get(k) ?? []), { date: r.keys[1], clicks: r.clicks, impressions: r.impressions, position: r.position }]);
+        }
         const rows: ItemEffect[] = items.map((i) => {
-          const series = (i.kind === 'anchor' ? q.get(i.query.toLowerCase()) : pg.get(i.page.toLowerCase())) ?? [];
+          const series = (i.kind === 'anchor' ? q.get(`${i.query.toLowerCase()}\n${normPage(i.page)}`) : pg.get(normPage(i.page))) ?? [];
           return {
             id: i.id,
             kind: i.kind,
