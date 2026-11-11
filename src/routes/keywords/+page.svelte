@@ -10,7 +10,7 @@
   import SiteGroupBar from '$lib/components/SiteGroupBar.svelte';
   import SiteGroupCell from '$lib/components/SiteGroupCell.svelte';
   import { TableSort } from '$lib/table-sort.svelte';
-  import { loadGroupItems, siteInTarget } from '$lib/group-items.svelte';
+  import { loadGroupItems, siteInTarget, pastGroupsOf } from '$lib/group-items.svelte';
   import { siteHref } from '$lib/utils/site';
   import { mainLabel } from '$lib/utils/key-map';
 
@@ -55,7 +55,7 @@
         : k === 'geo' ? (locale[s.siteUrl]?.geos.join(', ') || null)
         : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0]?.key ?? null)
         : k === 'pay' ? (data.pay[s.siteUrl] ?? 0)
-        : k === 'group' ? (siteInTarget(s.siteUrl) ? 1 : 0)
+        : k === 'group' ? (siteInTarget(s.siteUrl) ? 'z' : (pastGroupsOf(s.siteUrl)[0]?.date ?? null))
         : s[k]
     )
   );
@@ -102,7 +102,7 @@
               <SortTh {sort} k="ctr" label="CTR" num />
               <SortTh {sort} k="position" label="Avg Pos" num />
               <SortTh {sort} k="pay" label="Перешли к оплате" num title="Нажатия кнопки оплаты — переходы на партнёрку за тот же период, по счётчику хаба на сайте" />
-              <SortTh {sort} k="group" label="В группу" title="Кнопка + добавляет сайт в группу, выбранную над таблицей («Сайты в группу»)" />
+              <SortTh {sort} k="group" label="В группу" title="Кнопка + добавляет сайт в группу, выбранную над таблицей («Сайты в группу»). Рядом — прошлые закупки сайта. Сортировка: сначала сайты этой группы, потом по последней закупке" />
               <SortTh {sort} k="lang" label="Язык" title="Язык сайта — как указан на его странице (у сайта с языковыми папками — все языки). Названия — как на бирже ссылок" />
               <SortTh {sort} k="geo" label="Гео" title="Страна сайта: из «Карты ключей FUT», иначе по зоне домена (.de, .co.uk), иначе Global. Названия — как на бирже ссылок" />
               <th></th>

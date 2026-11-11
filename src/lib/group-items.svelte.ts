@@ -9,6 +9,10 @@ export interface GroupSummary {
   items: number;
   hosts: string[];
   done: string[];
+  /** Дата закупки (YYYY-MM-DD): день фиксации, иначе дата в названии. */
+  date?: string | null;
+  /** Ссылок в группе по сайтам: домен → сколько. */
+  links?: Record<string, number>;
 }
 export interface HistoryRow {
   id: number;
@@ -82,6 +86,19 @@ function hostOf(siteUrl: string): string {
 }
 
 export const siteInTarget = (siteUrl: string) => !!targetGroup()?.hosts.includes(hostOf(siteUrl));
+
+/**
+ * Прошлые закупки сайта: другие группы, где он есть (сайт в группе или ссылки
+ * на него), новые сверху — чтобы, собирая новую, видеть, что брали вчера.
+ */
+export function pastGroupsOf(siteUrl: string): { id: number; name: string; date: string | null; links: number }[] {
+  const h = hostOf(siteUrl);
+  if (!h) return [];
+  return gi.groups
+    .filter((g) => g.id !== gi.targetId && (g.hosts.includes(h) || (g.links?.[h] ?? 0) > 0))
+    .map((g) => ({ id: g.id, name: g.name, date: g.date ?? null, links: g.links?.[h] ?? 0 }))
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.id - a.id);
+}
 
 export async function toggleSiteInTarget(siteUrl: string) {
   const g = targetGroup();

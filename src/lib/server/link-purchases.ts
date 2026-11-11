@@ -121,3 +121,19 @@ export function keywordPurchaseMarks(db: Db, siteUrl: string, query: string, pag
   }
   return out;
 }
+
+/**
+ * Для колонки «В группу»: дата закупки каждой группы и сколько ссылок в ней
+ * на каждый сайт (по домену, без www).
+ */
+export function groupDatesAndLinks(db: Db): Map<number, { date: string; links: Record<string, number> }> {
+  const groups = db.prepare('SELECT id, name, created_at, fixed_at FROM site_groups').all() as { id: number; name: string; created_at: number; fixed_at: number | null }[];
+  const out = new Map(groups.map((g) => [g.id, { date: purchaseDate(g), links: {} as Record<string, number> }]));
+  const rows = db.prepare('SELECT group_id, site_url, SUM(qty) AS n FROM site_group_items GROUP BY group_id, site_url').all() as { group_id: number; site_url: string; n: number }[];
+  for (const r of rows) {
+    const g = out.get(r.group_id);
+    const h = hostOf(r.site_url);
+    if (g && h) g.links[h] = (g.links[h] ?? 0) + r.n;
+  }
+  return out;
+}

@@ -12,18 +12,24 @@ import {
   getSiteGroup,
   normalizeHost
 } from '$lib/server/site-groups';
+import { groupDatesAndLinks } from '$lib/server/link-purchases';
 import { addGroupItem, removeGroupItem, itemMarks, todayGroupName, setItemQty, addNakedItem, siteHistory, removeGroupItemById, setItemQtyById, type NewItem } from '$lib/server/group-items';
 
-const summaries = () =>
-  listSiteGroups(db()).map((g) => ({
+const summaries = () => {
+  // Дата закупки и ссылки по сайтам — чтобы у сайта было видно прошлые закупки.
+  const extra = groupDatesAndLinks(db());
+  return listSiteGroups(db()).map((g) => ({
     id: g.id,
     name: g.name,
     active: g.active,
     fixedAt: g.fixedAt,
     items: g.items,
     hosts: g.hosts,
-    done: g.done
+    done: g.done,
+    date: extra.get(g.id)?.date ?? null,
+    links: extra.get(g.id)?.links ?? {}
   }));
+};
 
 /** Группы и пометки для колонки «В группу» в Striking Distance. ?site= — по одному сайту. */
 export const GET: RequestHandler = async ({ url, locals }) => {

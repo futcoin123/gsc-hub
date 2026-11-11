@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openDb, type Db } from '../src/lib/server/db';
 import { createSiteGroup } from '../src/lib/server/site-groups';
 import { addGroupItem, addNakedItem, setGroupFixed } from '../src/lib/server/group-items';
-import { dateFromGroupName, listGroupPurchases, groupPurchaseMarks, keywordPurchaseMarks, itemsLabel } from '../src/lib/server/link-purchases';
+import { dateFromGroupName, listGroupPurchases, groupPurchaseMarks, keywordPurchaseMarks, itemsLabel, groupDatesAndLinks } from '../src/lib/server/link-purchases';
 import { listSiteEventsForSite } from '../src/lib/server/site-events';
 import { windows, sumWindow } from '../src/lib/server/purchase-effect';
 
@@ -52,6 +52,16 @@ describe('закупки из групп', () => {
     expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fifa coins', 'https://futcoins.eu/it/')[0].label).toContain('безанкор futcoins.eu/it/');
     expect(keywordPurchaseMarks(db, 'sc-domain:futcoins.eu', 'fifa coins', 'https://futcoins.eu/')).toEqual([]);
     expect(keywordPurchaseMarks(db, 'sc-domain:other.com', 'fc 27 coins', null)).toEqual([]);
+  });
+
+  it('для колонки «В группу»: дата закупки и ссылки по сайтам', () => {
+    const a = createSiteGroup(db, '09-11-26');
+    addGroupItem(db, a, item('fc 27 coins', 'https://futcoins.eu/', 3));
+    addGroupItem(db, a, { siteUrl: 'https://www.fut-coin.de/', query: 'fifa coins kaufen', page: 'https://www.fut-coin.de/', qty: 2 });
+    const b = createSiteGroup(db, '10-11-26');
+    const m = groupDatesAndLinks(db);
+    expect(m.get(a)).toEqual({ date: '2026-11-09', links: { 'futcoins.eu': 3, 'fut-coin.de': 2 } });
+    expect(m.get(b)).toEqual({ date: '2026-11-10', links: {} });
   });
 
   it('коротко, что купили', () => {
