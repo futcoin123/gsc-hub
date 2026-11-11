@@ -303,6 +303,15 @@ CREATE TABLE IF NOT EXISTS site_locale (
   error      TEXT,
   checked_at INTEGER NOT NULL
 );
+-- Отказы: визиты (вход и всё дальше без перерыва в 30 минут) и отказы — визиты
+-- без второй страницы и без нажатий. День — день входа (по Берлину).
+CREATE TABLE IF NOT EXISTS visit_stats (
+  day     TEXT NOT NULL,
+  host    TEXT NOT NULL,
+  visits  INTEGER NOT NULL DEFAULT 0,
+  bounces INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, host)
+);
 -- Ответы Search Console: копия памяти хаба, чтобы перезапуск сервера
 -- (выкладка обновления) не начинал с пустой памяти.
 CREATE TABLE IF NOT EXISTS gsc_cache (

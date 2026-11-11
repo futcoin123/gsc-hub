@@ -122,6 +122,69 @@ export function entrySource(ip: string, host: string, now: number = Date.now()):
   return e && now - e.at < ENTRY_MS ? e.src : '';
 }
 
+// ─── Отказы (bounce rate) ───────────────────────────────────────────────────
+// Визит — вход на сайт (просмотр с источником, не переход внутри сайта) и всё,
+// что тот же посетитель делал на этом сайте дальше без перерыва в 30 минут.
+// Отказ — визит, в котором не было ни второй страницы, ни нажатия (кнопки,
+// ссылки, перехода к оплате), как Bounce rate в старом Google Analytics.
+// Визит считается, когда закончился: новый вход или 30 минут тишины. Посетитель
+// узнаётся так же, как для источника переходов к оплате (код вместо IP), и
+// только в памяти панели; в базу пишутся лишь суммы за день по сайту.
+const visits = new Map<string, { host: string; day: string; at: number; engaged: boolean }>();
+let lastSweep = 0;
+
+function closeVisit(db: Db, v: { host: string; day: string; engaged: boolean }): void {
+  db.prepare(
+    `INSERT INTO visit_stats (day, host, visits, bounces) VALUES (?, ?, 1, ?)
+     ON CONFLICT(day, host) DO UPDATE SET visits = visits + 1, bounces = bounces + excluded.bounces`
+  ).run(v.day, v.host, v.engaged ? 0 : 1);
+}
+
+/** Закрыть визиты, в которых 30 минут ничего не происходило. */
+export function sweepVisits(db: Db, now: number = Date.now(), force = false): void {
+  if (!force && now - lastSweep < 60_000) return;
+  lastSweep = now;
+  for (const [k, v] of visits) {
+    if (now - v.at >= ENTRY_MS) {
+      visits.delete(k);
+      closeVisit(db, v);
+    }
+  }
+}
+
+/** Событие посетителя — для отказов. target у просмотра: источник ('(internal)' — переход внутри сайта, '' — неизвестно). */
+export function trackVisit(db: Db, ip: string, host: string, kind: string, target: string, now: number = Date.now()): void {
+  sweepVisits(db, now);
+  if (!ip || ip === 'worker') return;
+  const k = `${ip}\n${host}`;
+  const cur = visits.get(k);
+  if (kind === 'view' && target !== '' && target !== '(internal)') {
+    // Новый вход: прошлый визит этого посетителя на этом сайте закончился.
+    if (cur) closeVisit(db, cur);
+    visits.set(k, { host, day: localToday(now), at: now, engaged: false });
+    return;
+  }
+  if (!cur || now - cur.at >= ENTRY_MS) return;
+  if (kind === 'view' || kind === 'button' || kind === 'link' || kind === 'out' || kind === 'submit') {
+    cur.engaged = true;
+    cur.at = now;
+  }
+}
+
+/** Визиты и отказы по сайтам за дни входа. */
+export function visitStatsForRange(db: Db, startDate: string, endDate: string, now: number = Date.now()): { host: string; visits: number; bounces: number }[] {
+  sweepVisits(db, now, true);
+  return db
+    .prepare('SELECT host, SUM(visits) AS visits, SUM(bounces) AS bounces FROM visit_stats WHERE day >= ? AND day <= ? GROUP BY host')
+    .all(startDate, endDate) as { host: string; visits: number; bounces: number }[];
+}
+
+/** Для тестов: забыть визиты в памяти. */
+export function resetVisits(): void {
+  visits.clear();
+  lastSweep = 0;
+}
+
 export function recordCheckoutSource(db: Db, host: string, source: string, day: string = localToday()): void {
   db.prepare(
     `INSERT INTO checkout_sources (day, host, source, n) VALUES (?, ?, ?, 1)

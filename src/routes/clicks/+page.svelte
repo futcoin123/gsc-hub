@@ -97,10 +97,10 @@
     ['d', 'Прямые', 'Без адреса, откуда пришли: набрали адрес, закладка, приложение, мессенджер'],
     ['o', 'Прочее', 'Соцсети, другие сайты и ссылки с метками utm']
   ];
-  type Site = { host: string; impr: number; gsc: number; src: Src6 | null; bImpr: number | null; bClicks: number | null; views: number; seconds: number; avg: number | null; buttons: number; submits: number; rateSubmit: number | null; rateButton: number | null };
+  type Site = { host: string; impr: number; gsc: number; src: Src6 | null; bImpr: number | null; bClicks: number | null; views: number; seconds: number; avg: number | null; buttons: number; submits: number; rateSubmit: number | null; rateButton: number | null; visits: number; bounces: number; bounce: number | null };
   const sitesRaw = $derived.by(() => {
     const m = new Map<string, Site>();
-    const get = (h: string) => m.get(h) ?? (m.set(h, { host: h, impr: data.gscImpr[h] ?? 0, gsc: data.gsc[h] ?? 0, src: null, bImpr: bingOf(h)?.impressions ?? null, bClicks: bingOf(h)?.clicks ?? null, views: 0, seconds: 0, avg: null, buttons: 0, submits: 0, rateSubmit: null, rateButton: null }), m.get(h)!);
+    const get = (h: string) => m.get(h) ?? (m.set(h, { host: h, impr: data.gscImpr[h] ?? 0, gsc: data.gsc[h] ?? 0, src: null, bImpr: bingOf(h)?.impressions ?? null, bClicks: bingOf(h)?.clicks ?? null, views: 0, seconds: 0, avg: null, buttons: 0, submits: 0, rateSubmit: null, rateButton: null, visits: data.visits[h]?.visits ?? 0, bounces: data.visits[h]?.bounces ?? 0, bounce: data.visits[h]?.visits ? data.visits[h].bounces / data.visits[h].visits : null }), m.get(h)!);
     for (const r of data.clicks) {
       const s = get(r.host);
       if (r.kind === 'view' && r.target !== '') {
@@ -124,10 +124,10 @@
     }
     return [...m.values()];
   });
-  type K = 'host' | 'impr' | 'gsc' | 'bImpr' | 'bClicks' | 'views' | 'src_g' | 'src_b' | 'src_s' | 'src_ai' | 'src_d' | 'src_o' | 'avg' | 'buttons' | 'submits' | 'rateButton' | 'rateSubmit';
+  type K = 'host' | 'impr' | 'gsc' | 'bImpr' | 'bClicks' | 'views' | 'src_g' | 'src_b' | 'src_s' | 'src_ai' | 'src_d' | 'src_o' | 'avg' | 'bounce' | 'buttons' | 'submits' | 'rateButton' | 'rateSubmit';
   // По умолчанию — по переходам к оплате, от больших к меньшим (просьба владелицы
   // 10.11.2026); при равных переходах — по кликам из Google.
-  const sort = new TableSort<K>('submits', -1, ['impr', 'gsc', 'bImpr', 'bClicks', 'views', 'src_g', 'src_b', 'src_s', 'src_ai', 'src_d', 'src_o', 'avg', 'buttons', 'submits', 'rateButton', 'rateSubmit']);
+  const sort = new TableSort<K>('submits', -1, ['impr', 'gsc', 'bImpr', 'bClicks', 'views', 'src_g', 'src_b', 'src_s', 'src_ai', 'src_d', 'src_o', 'avg', 'bounce', 'buttons', 'submits', 'rateButton', 'rateSubmit']);
   const byGsc = $derived([...sitesRaw].sort((a, b) => (b.gsc ?? -1) - (a.gsc ?? -1)));
   const sites = $derived(sort.apply(byGsc, (s, k) => (k.startsWith('src_') ? (s.src ? s.src[k.slice(4) as keyof Src6] : null) : s[k as Exclude<K, `src_${string}`>])));
 
@@ -169,9 +169,11 @@
       (a, s) => ({
         n: a.n + 1, impr: a.impr + s.impr, gsc: a.gsc + s.gsc, bImpr: a.bImpr + (s.bImpr ?? 0), bClicks: a.bClicks + (s.bClicks ?? 0), v: a.v + s.views, sec: a.sec + s.seconds, b: a.b + s.buttons, s: a.s + s.submits,
         src: { g: a.src.g + (s.src?.g ?? 0), b: a.src.b + (s.src?.b ?? 0), s: a.src.s + (s.src?.s ?? 0), ai: a.src.ai + (s.src?.ai ?? 0), d: a.src.d + (s.src?.d ?? 0), o: a.src.o + (s.src?.o ?? 0) },
-        withSrc: a.withSrc + (s.src ? 1 : 0)
+        withSrc: a.withSrc + (s.src ? 1 : 0),
+        vis: a.vis + s.visits,
+        bnc: a.bnc + s.bounces
       }),
-      { n: 0, impr: 0, gsc: 0, bImpr: 0, bClicks: 0, v: 0, sec: 0, b: 0, s: 0, src: { g: 0, b: 0, s: 0, ai: 0, d: 0, o: 0 } as Src6, withSrc: 0 }
+      { n: 0, impr: 0, gsc: 0, bImpr: 0, bClicks: 0, v: 0, sec: 0, b: 0, s: 0, src: { g: 0, b: 0, s: 0, ai: 0, d: 0, o: 0 } as Src6, withSrc: 0, vis: 0, bnc: 0 }
     )
   );
   const sitesWord = (n: number) => {
@@ -282,6 +284,7 @@
               <SortTh {sort} k="views" label="Просмотры страниц" num title="Сколько раз открыли страницы сайта (счётчик; считается с момента обновления скрипта)" />
               {#each SRC_COLS as [c, label, title] (c)}<SortTh {sort} k={`src_${c}` as K} {label} num {title} />{/each}
               <SortTh {sort} k="avg" label="Среднее время" num title="Сколько в среднем страница была открыта на экране (свёрнутая вкладка не считается)" />
+              <SortTh {sort} k="bounce" label="Отказы" num title="Bounce rate: доля визитов, в которых посетитель открыл одну страницу и ничего не нажал (ни второй страницы, ни кнопки, ни ссылки) и ушёл. Визит — вход на сайт и всё, что было дальше без перерыва в 30 минут. Только сайты, чей счётчик передаёт, откуда пришёл посетитель; считается с 12.11.2026" />
               <SortTh {sort} k="buttons" label="Другие кнопки" num title="Нажатия кнопок и ссылок, после которых заказа ещё нет: «Order coins» в шапке, ссылки на другие сайты" />
               <SortTh {sort} k="rateButton" label="% от просмотров" num title="Другие кнопки / просмотры страниц" />
               <SortTh {sort} k="submits" label="Перешли к оплате" num title="Нажали кнопку заказа («Continue to checkout», «Afrekenen»…) и реально ушли на оплату / к партнёру. Если сайт не пустил (например, сумма мала) — не считается" />
@@ -299,6 +302,7 @@
               <td class="num app-num">{fmt(totals.v)}</td>
               {#each SRC_COLS as [c] (c)}<td class="num app-num" title={totals.withSrc < totals.n ? `Только сайты, чей счётчик передаёт источник: ${totals.withSrc} из ${totals.n}` : ''}>{totals.withSrc ? fmt(totals.src[c]) : '—'}</td>{/each}
               <td class="num app-num">{dur(totals.v ? totals.sec / totals.v : null)}</td>
+              <td class="num app-num" title={totals.vis ? `Визитов ${totals.vis}, из них отказов ${totals.bnc}` : ''}>{totals.vis ? pct(totals.bnc / totals.vis) : '—'}</td>
               <td class="num app-num">{fmt(totals.b)}</td>
               <td class="num app-num">{pct(totals.v ? totals.b / totals.v : null)}</td>
               <td class="num app-num">{fmt(totals.s)}</td>
@@ -333,6 +337,7 @@
                   {:else}<td class="num text-ink-4" title="Счётчик этого сайта не передаёт, откуда пришёл посетитель">—</td>{/if}
                 {/each}
                 <td class="num app-num">{dur(s.avg)}</td>
+                <td class="num app-num" title={s.visits ? `Визитов ${s.visits}, из них отказов ${s.bounces}` : 'Нет данных: счётчик сайта не передаёт, откуда пришёл посетитель, или визитов ещё не было'}>{s.bounce === null ? '—' : pct(s.bounce)}</td>
                 <td class="num app-num">{fmt(s.buttons)}</td>
                 <td class="num app-num">{pct(s.rateButton)}</td>
                 <td class="num app-num font-semibold">{fmt(s.submits)}</td>
@@ -345,7 +350,7 @@
                 {@const srcs = sr.rows}
                 {@const srcTotal = srcs.reduce((a, x) => a + x.n, 0)}
                 <tr class="bg-sunk hover:bg-sunk">
-                  <td colspan={(showBing ? 11 : 9) + SRC_COLS.length} class="px-3 py-2">
+                  <td colspan={(showBing ? 12 : 10) + SRC_COLS.length} class="px-3 py-2">
                     <div class="mb-1 text-xs font-semibold text-ink-2">Откуда пришли <span class="font-normal text-ink-3">— входы на сайт (переходы внутри сайта не считаются) и сколько из них перешли к оплате</span></div>
                     {#if srcs.length || sr.unknownPay}
                       <table class="app-table mb-3 rounded border border-line bg-pane">

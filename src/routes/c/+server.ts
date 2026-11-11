@@ -3,7 +3,7 @@ import { db } from '$lib/server/db';
 import { listAllKnownSites } from '$lib/server/google';
 import { siteHostname } from '$lib/utils/url-filters';
 import { counterKeyOk } from '$lib/server/config';
-import { allowClick, clicksToday, countedHosts, entrySource, isBotUA, normHost, parseWorkerEvent, recordCheckoutSource, recordClick, recordTime, rememberEntry, workerEventInput } from '$lib/server/button-clicks';
+import { allowClick, clicksToday, countedHosts, entrySource, isBotUA, normHost, parseWorkerEvent, recordCheckoutSource, recordClick, recordTime, rememberEntry, trackVisit, workerEventInput } from '$lib/server/button-clicks';
 
 // Приём событий счётчика от Cloudflare Worker ваших сайтов (без входа, но с
 // секретным ключом). Считаем только ваши сайты из подключённых консолей,
@@ -67,6 +67,7 @@ export const POST: RequestHandler = async ({ request }) => {
     if (clicksToday(db(), host) >= MAX_PER_SITE_DAY) return EMPTY();
     recordClick(db(), parsed.click);
     // Источник перехода к оплате — по входу того же посетителя (см. rememberEntry).
+    trackVisit(db(), ip, host, parsed.click.kind, parsed.click.target);
     if (parsed.click.kind === 'view') rememberEntry(ip, host, parsed.click.target);
     else if (parsed.click.kind === 'submit') recordCheckoutSource(db(), host, entrySource(ip, host));
   } catch {
