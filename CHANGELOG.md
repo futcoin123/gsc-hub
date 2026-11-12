@@ -8,6 +8,14 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Buttons → "Проверка счётчиков" (counter check).** The panel keeps a log of
+  counter events it receives: per site, what was accepted and what was dropped
+  and why (wrong site key, site in no connected console, bot, malformed event,
+  rate limit). A block above the table gives a 7-day verdict per site — not
+  working / partly / working — such as "views arrive without a source" or "only
+  checkouts arrive". The panel used to drop such events silently, so zeros could
+  not be explained. "счётчик не стоит" becomes "нет событий" or "события
+  отброшены" with the reason on hover.
 - **"Без консоли" — a separate section for sites that are not in Search
   Console.** Domains are pasted as a list, link buys run as dated campaigns, and
   the site, anchor (or naked link) and page are typed in by hand. Once the links

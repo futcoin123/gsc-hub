@@ -394,6 +394,19 @@ CREATE TABLE IF NOT EXISTS counter_key_hosts (
   PRIMARY KEY (hash, host)
 );
 
+-- Журнал приёма событий счётчика: по сайту, дню и виду — сколько принято и
+-- сколько отброшено и почему (outcome). Раньше /c молча отвечал 204 на всё, и
+-- понять, почему у сайта нули, было нельзя. Хранится 30 дней.
+CREATE TABLE IF NOT EXISTS counter_log (
+  day     TEXT NOT NULL,
+  host    TEXT NOT NULL,
+  kind    TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  n       INTEGER NOT NULL,
+  last_at INTEGER NOT NULL,
+  PRIMARY KEY (day, host, kind, outcome)
+);
+
 -- Раздел «Без консоли»: свои сайты, которых нет в Search Console, и закупки
 -- ссылок на них по датам. Отдельно от групп сайтов консолей (site_groups):
 -- ни в «Группы», ни в «Закупки», ни в фильтр шапки не попадают.

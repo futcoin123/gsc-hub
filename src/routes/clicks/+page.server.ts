@@ -10,6 +10,8 @@ import { siteHostname } from '$lib/utils/url-filters';
 import { listAllKnownSites } from '$lib/server/google';
 import { activeGroupHosts } from '$lib/server/site-groups';
 import { bingConfigured, bingTotals, getBing } from '$lib/server/bing';
+import { counterLogSince } from '$lib/server/counter-log';
+import { localToday } from '$lib/server/gsc-calendar';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
@@ -87,6 +89,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     // Отказы: визиты и отказы по сайтам (только сайты, чей счётчик передаёт источник).
     visits: Object.fromEntries(visitStatsForRange(db(), period.startDate, period.endDate).filter((r) => mine(r.host)).map((r) => [r.host, { visits: r.visits, bounces: r.bounces }])) as Record<string, { visits: number; bounces: number }>,
     gsc,
+    // Журнал приёма событий за 7 дней: что пришло от счётчика сайта и почему отброшено.
+    counterLog: Object.fromEntries(Object.entries(counterLogSince(db(), localToday(Date.now() - 6 * 86400_000))).filter(([h]) => mine(h))),
+    counterLogStart: (db().prepare('SELECT MIN(day) AS d FROM counter_log').get() as { d: string | null }).d,
     gscImpr, gscErr, noConsole, bing, bingState, bingLatest, lastSeen: seen, errors, workerCode: workerScript(url.origin), counterKey: ensureCounterKey(db()), keys: listCounterKeys(db()) };
 };
 

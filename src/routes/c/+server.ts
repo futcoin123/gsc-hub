@@ -4,6 +4,7 @@ import { listAllKnownSites } from '$lib/server/google';
 import { siteHostname } from '$lib/utils/url-filters';
 import { counterKeyOk } from '$lib/server/config';
 import { allowClick, clicksToday, countedHosts, entrySource, isBotUA, normHost, parseWorkerEvent, recordCheckoutSource, recordClick, recordTime, rememberEntry, trackVisit, workerEventInput } from '$lib/server/button-clicks';
+import { logCounter, logKind, type CounterOutcome } from '$lib/server/counter-log';
 
 // Приём событий счётчика от Cloudflare Worker ваших сайтов (без входа, но с
 // секретным ключом). Считаем только ваши сайты из подключённых консолей,
@@ -50,22 +51,58 @@ export const GET: RequestHandler = () => EMPTY();
 export const POST: RequestHandler = async ({ request }) => {
   const ua = request.headers.get('x-client-ua') ?? '';
   const ip = request.headers.get('x-client-ip') || 'worker';
+  const key = request.headers.get('x-counter-key');
+  // Журнал приёма (см. counter-log.ts): что принято и почему отброшено — по сайту.
+  let host = '';
+  let kind = 'event';
+  const log = (outcome: CounterOutcome) => {
+    try {
+      if (host) logCounter(db(), host, kind, outcome);
+    } catch {
+      /* журнал не должен ломать приём */
+    }
+  };
   try {
-    // Новый Worker присылает событие страницы как есть — переводим его ключом сайта.
-    const parsed = parseWorkerEvent(workerEventInput(await request.json(), request.headers.get('x-counter-key')));
-    if (!parsed) return EMPTY();
-    const host = 'click' in parsed ? parsed.click.host : parsed.time.host;
+    const raw = await request.json();
+    const rawHost = raw && typeof raw === 'object' && typeof (raw as { h?: unknown }).h === 'string' ? normHost((raw as { h: string }).h) : '';
     // Любой выданный и не отозванный ключ; запоминаем, с какого сайта он пришёл.
-    if (!counterKeyOk(db(), request.headers.get('x-counter-key'), host)) return EMPTY();
-    if (isBotUA(ua)) return EMPTY();
-    if (!(await isKnownHost(host))) return EMPTY();
-    if ('time' in parsed) {
-      if (allowClick(ip, { host, page: parsed.time.page, kind: 'view', label: 'time:' + Date.now(), target: '' })) recordTime(db(), parsed.time);
+    const keyOk = !!rawHost && counterKeyOk(db(), key, rawHost);
+    // Новый Worker присылает событие страницы как есть — переводим его ключом сайта.
+    const parsed = parseWorkerEvent(workerEventInput(raw, key));
+    if (!parsed) {
+      // В журнал — только с нашим ключом или от нашего сайта: мусор из интернета не пишем.
+      host = rawHost;
+      if (keyOk) log('bad-event');
+      else if (rawHost && (await isKnownHost(rawHost))) log('bad-key');
       return EMPTY();
     }
-    if (!allowClick(ip, parsed.click)) return EMPTY();
-    if (clicksToday(db(), host) >= MAX_PER_SITE_DAY) return EMPTY();
+    host = 'click' in parsed ? parsed.click.host : parsed.time.host;
+    kind = 'click' in parsed ? logKind(parsed.click.kind, parsed.click.target) : 'time';
+    if (!(host === rawHost ? keyOk : counterKeyOk(db(), key, host))) {
+      if (await isKnownHost(host)) log('bad-key');
+      return EMPTY();
+    }
+    if (isBotUA(ua)) {
+      log('bot');
+      return EMPTY();
+    }
+    if (!(await isKnownHost(host))) {
+      log('unknown-site');
+      return EMPTY();
+    }
+    if ('time' in parsed) {
+      if (allowClick(ip, { host, page: parsed.time.page, kind: 'view', label: 'time:' + Date.now(), target: '' })) {
+        recordTime(db(), parsed.time);
+        log('ok');
+      } else log('limit');
+      return EMPTY();
+    }
+    if (!allowClick(ip, parsed.click) || clicksToday(db(), host) >= MAX_PER_SITE_DAY) {
+      log('limit');
+      return EMPTY();
+    }
     recordClick(db(), parsed.click);
+    log('ok');
     // Источник перехода к оплате — по входу того же посетителя (см. rememberEntry).
     trackVisit(db(), ip, host, parsed.click.kind, parsed.click.target);
     if (parsed.click.kind === 'view') rememberEntry(ip, host, parsed.click.target);
