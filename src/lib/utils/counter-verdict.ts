@@ -11,7 +11,8 @@ export interface CounterLogRow {
 }
 
 export interface Finding {
-  level: 'ok' | 'warn' | 'bad';
+  /** wait — не ошибка: посетителей ещё не было. */
+  level: 'ok' | 'wait' | 'warn' | 'bad';
   text: string;
 }
 
@@ -24,6 +25,10 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
     return [{ level: 'bad', text: 'От сайта не пришло ни одного события. Счётчик на сайте ничего не отправляет в панель (или сайт никто не открывал).' }];
   }
   const out: Finding[] = [];
+  // Проверка связи из панели — отдельно от статистики.
+  const tests = rows.filter((r) => r.kind === 'test');
+  const ping = tests.find((r) => r.outcome === 'ok');
+  rows = rows.filter((r) => r.kind !== 'test');
   const rejected = (o: string) => sum(rows, (r) => r.outcome === o);
   const when = (o: string) => fmtTime(last(rows, (r) => r.outcome === o));
   if (rejected('bad-key')) out.push({ level: 'bad', text: `Отброшено ${rejected('bad-key')} событий: ключ сайта не подходит (последнее ${when('bad-key')}). Секрет COUNTER_KEY в Cloudflare у сайта — не действующий ключ панели: обновите его.` });
@@ -39,6 +44,12 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
   else if (ok('view-nosrc') > ok('view')) out.push({ level: 'warn', text: `Больше половины просмотров без источника (${ok('view-nosrc')} из ${views}).` });
   if (views && !ok('time')) out.push({ level: 'warn', text: 'Время на странице не приходит — «Среднее время» пустое.' });
 
+  if (!rows.length && ping) {
+    return [{ level: 'ok', text: `Связь с панелью есть: проверка прошла ${fmtTime(ping.lastAt)}. Посетителей с тех пор не было.` }];
+  }
+  if (!rows.length && tests.length) {
+    return [{ level: 'bad', text: `Проверка связи дошла, но отброшена: ключ сайта не подходит (${fmtTime(last(tests, () => true))}). Обновите секрет COUNTER_KEY в Cloudflare.` }];
+  }
   if (!out.length) {
     out.push({ level: 'ok', text: `Принято ${accepted} событий (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.` });
   }

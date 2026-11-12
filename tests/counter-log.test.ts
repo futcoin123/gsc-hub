@@ -62,11 +62,11 @@ describe('журнал приёма /c', () => {
     expect(clicksForRange(testDb, day(), day())).toEqual([]);
   });
 
-  it('сайта нет в консолях — «unknown-site»; бот — «bot»; битое событие — «bad-event»', async () => {
+  it('сайта нет в консолях — принято (ключ верный); бот — «bot»; битое событие — «bad-event»', async () => {
     await send('other.de', { k: 'view', p: '/', r: '' });
     await send('fut-coins.nl', { k: 'view', p: '/', r: '' }, { ua: 'curl/8.0' });
     await send('fut-coins.nl', '{"type":"vue","page":"/"}');
-    expect(log()['other.de']).toEqual([expect.objectContaining({ outcome: 'unknown-site' })]);
+    expect(log()['other.de']).toEqual([expect.objectContaining({ outcome: 'ok' })]);
     expect(log()['fut-coins.nl'].map((r) => `${r.kind}:${r.outcome}`).sort()).toEqual(['event:bad-event', 'view:bot']);
   });
 
@@ -97,6 +97,12 @@ describe('вывод по сайту', () => {
       { kind: 'time', outcome: 'ok', n: 9, lastAt: 1 }
     ], t);
     expect(v).toEqual([expect.objectContaining({ level: 'warn', text: expect.stringContaining('без источника') })]);
+  });
+  it('была только проверка связи — связь есть, посетителей ждём; проверка не считается событием', () => {
+    expect(counterVerdict([{ kind: 'test', outcome: 'ok', n: 1, lastAt: 5 }], t)).toEqual([{ level: 'ok', text: 'Связь с панелью есть: проверка прошла 5. Посетителей с тех пор не было.' }]);
+    expect(counterVerdict([{ kind: 'test', outcome: 'bad-key', n: 1, lastAt: 5 }], t)[0]).toMatchObject({ level: 'bad', text: expect.stringContaining('COUNTER_KEY') });
+    const v = counterVerdict([{ kind: 'test', outcome: 'ok', n: 1, lastAt: 1 }, { kind: 'view', outcome: 'ok', n: 2, lastAt: 2 }, { kind: 'time', outcome: 'ok', n: 2, lastAt: 2 }], t);
+    expect(v).toEqual([{ level: 'ok', text: 'Принято 4 событий (последнее 2): просмотры с источником, время.' }]);
   });
   it('всё приходит — одна строка «принято»', () => {
     const v = counterVerdict([

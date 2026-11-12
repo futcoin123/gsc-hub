@@ -67,6 +67,21 @@ export const POST: RequestHandler = async ({ request }) => {
     const rawHost = raw && typeof raw === 'object' && typeof (raw as { h?: unknown }).h === 'string' ? normHost((raw as { h: string }).h) : '';
     // Любой выданный и не отозванный ключ; запоминаем, с какого сайта он пришёл.
     const keyOk = !!rawHost && counterKeyOk(db(), key, rawHost);
+    // Проверка связи из панели (единый счётчик: «Проверить сайт»): в журнал, не в статистику.
+    const rawE = raw && typeof raw === 'object' ? (raw as { e?: unknown }).e : undefined;
+    let rawEvent: { k?: unknown } | null = null;
+    try {
+      rawEvent = typeof rawE === 'string' ? JSON.parse(rawE) : null;
+    } catch {
+      rawEvent = null;
+    }
+    if (rawEvent && rawEvent.k === 'test') {
+      host = rawHost;
+      kind = 'test';
+      if (keyOk) log('ok');
+      else if (rawHost && (await isKnownHost(rawHost))) log('bad-key');
+      return EMPTY();
+    }
     // Новый Worker присылает событие страницы как есть — переводим его ключом сайта.
     const parsed = parseWorkerEvent(workerEventInput(raw, key));
     if (!parsed) {
@@ -86,10 +101,8 @@ export const POST: RequestHandler = async ({ request }) => {
       log('bot');
       return EMPTY();
     }
-    if (!(await isKnownHost(host))) {
-      log('unknown-site');
-      return EMPTY();
-    }
+    // Сайта может не быть в Search Console (владелица добавляет сайты туда сама,
+    // когда ей нужно): верный ключ есть только у её сайтов — событие принимаем.
     if ('time' in parsed) {
       if (allowClick(ip, { host, page: parsed.time.page, kind: 'view', label: 'time:' + Date.now(), target: '' })) {
         recordTime(db(), parsed.time);

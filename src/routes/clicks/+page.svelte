@@ -11,9 +11,9 @@
 
   let { data, form } = $props();
   const KIND: Record<string, string> = { view: 'Просмотр', submit: 'Перешёл к оплате', button: 'Кнопка', out: 'Ссылка на другой сайт', link: 'Обычная ссылка' };
-  let copied = $state<'' | 'code' | 'key'>('');
+  let copied = $state<string>('');
   let showCode = $state(false);
-  async function copy(text: string, what: 'code' | 'key') {
+  async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
       copied = what;
@@ -165,21 +165,60 @@
   const fmtDay = (iso: string) => iso.split('-').reverse().join('.');
   // «Проверка счётчиков»: вывод по журналу приёма событий за 7 дней (см. counter-verdict.ts).
   const fmtTs = (ts: number) => new Date(ts).toLocaleString('ru-RU', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const LEVEL_RANK: Record<Finding['level'], number> = { bad: 0, warn: 1, ok: 2 };
+  const LEVEL_RANK: Record<Finding['level'], number> = { bad: 0, warn: 1, wait: 2, ok: 3 };
   const checks = $derived.by(() =>
     data.hosts
       .map((h: string) => {
         const rows = data.counterLog[h] ?? [];
         // Журнал ведётся с обновления панели: пусто, но события раньше были — не «сломано».
         const f: Finding[] = !rows.length && data.lastSeen[h]
-          ? [{ level: 'warn', text: `С ${data.counterLogStart ? fmtDay(data.counterLogStart) : 'включения журнала'} событий от сайта не было; последнее раньше — ${fmtDay(data.lastSeen[h])}. Если на сайт заходили, а здесь пусто, — счётчик сайта перестал отправлять события.` }]
+          ? [{ level: 'wait', text: `С начала журнала (${data.counterLogStart ? fmtDay(data.counterLogStart) : 'сегодня'}) на сайт ещё никто не заходил — ждём посетителей. Раньше события были (последнее ${fmtDay(data.lastSeen[h])}). Связь можно проверить кнопкой «Проверить сайт» ниже.` }]
           : counterVerdict(rows, fmtTs);
         return { h, f, rank: Math.min(...f.map((x) => LEVEL_RANK[x.level])) };
       })
       .sort((a: { rank: number; h: string }, b: { rank: number; h: string }) => a.rank - b.rank || a.h.localeCompare(b.h))
   );
   const checkOf = (h: string) => checks.find((c: { h: string }) => c.h === h);
+  // Единый счётчик: файлы для сайта и проверка связи сайт → панель.
+  let kitHost = $state('');
+  let kitEvents = $state('');
+  let kit = $state<{ host: string; events: string; version: string; page: string; module: string } | null>(null);
+  let kitErr = $state<string | null>(null);
+  let ping = $state<{ step: string; target: string; status?: number; detail?: string } | null>(null);
+  let pingBusy = $state(false);
+  const kitQuery = () => `h=${encodeURIComponent(kitHost)}${kitEvents.trim() ? `&e=${encodeURIComponent(kitEvents.trim())}` : ''}`;
+  async function loadKit() {
+    kitErr = null;
+    kit = null;
+    if (!kitHost) return;
+    const r = await fetch(`/clicks/kit?${kitQuery()}`);
+    if (!r.ok) {
+      kitErr = (await r.json().catch(() => ({})))?.message ?? `HTTP ${r.status}`;
+      return;
+    }
+    kit = await r.json();
+  }
+  const PING_TEXT: Record<string, string> = {
+    ok: 'Работает: сайт отвечает, ключ на месте, проверка дошла до панели и принята.',
+    unreachable: 'Сайт не ответил на адрес событий.',
+    'no-kit': 'На сайте не стоит единый счётчик (адрес событий отвечает, но не им) — или адрес событий указан не тот.',
+    'no-key': 'Счётчик стоит, но в Cloudflare Pages нет секрета COUNTER_KEY — сайт ничего не отправляет.',
+    'bad-key': 'Сайт отправил проверку, но панель её отбросила: ключ сайта не подходит. Обновите секрет COUNTER_KEY.',
+    'no-arrival': 'Сайт принял проверку, но в панель она не пришла за 10 секунд. Повторите через 10–20 секунд; если снова — сайт не может достучаться до панели.'
+  };
+  async function runPing() {
+    if (!kitHost) return;
+    pingBusy = true;
+    ping = null;
+    try {
+      const r = await fetch('/clicks/ping', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ h: kitHost, e: kitEvents.trim() || kit?.events }) });
+      ping = r.ok ? await r.json() : { step: 'unreachable', target: '', detail: `HTTP ${r.status}` };
+    } finally {
+      pingBusy = false;
+    }
+  }
   const checksBad = $derived(checks.filter((c: { rank: number }) => c.rank < 2).length);
+  const checksWait = $derived(checks.filter((c: { rank: number }) => c.rank === 2).length);
   const periodLabel = $derived(data.period.startDate === data.period.endDate ? fmtDay(data.period.startDate) : `${fmtDay(data.period.startDate)} – ${fmtDay(data.period.endDate)}`);
   // Итого по всем сайтам в таблице: суммы, а среднее время и доли — по всем вместе.
   const totals = $derived(
@@ -289,7 +328,7 @@
       <details class="border-b border-line" open={checksBad > 0}>
         <summary class="cursor-pointer select-none px-3 py-2 text-xs hover:bg-sunk">
           <span class="font-semibold text-ink">Проверка счётчиков</span>
-          <span class="text-ink-3">· за 7 дней · в порядке {checks.length - checksBad} из {checks.length}</span>
+          <span class="text-ink-3">· за 7 дней · работает {checks.length - checksBad - checksWait} из {checks.length}{checksWait ? ` · ждём посетителей ${checksWait}` : ''}</span>
           {#if checksBad}<span class="badge badge-warn ml-1">проблемы у {checksBad}</span>{/if}
         </summary>
         <div class="px-3 pb-3">
@@ -303,7 +342,7 @@
               {#each checks as c (c.h)}
                 <tr>
                   <td class="pii whitespace-nowrap font-medium text-ink">{c.h}</td>
-                  <td class="whitespace-nowrap"><span class="badge {c.rank === 0 ? 'badge-bad' : c.rank === 1 ? 'badge-warn' : 'badge-ok'}">{c.rank === 0 ? 'не работает' : c.rank === 1 ? 'частично' : 'работает'}</span></td>
+                  <td class="whitespace-nowrap"><span class="badge {c.rank === 0 ? 'badge-bad' : c.rank === 1 ? 'badge-warn' : c.rank === 2 ? 'badge-muted' : 'badge-ok'}">{c.rank === 0 ? 'не работает' : c.rank === 1 ? 'частично' : c.rank === 2 ? 'ждём посетителей' : 'работает'}</span></td>
                   <td class="text-xs text-ink-2">{#each c.f as f, i (i)}<div>{f.text}</div>{/each}</td>
                 </tr>
               {/each}
@@ -312,6 +351,58 @@
         </div>
       </details>
     {/if}
+
+    <!-- Единый счётчик: один код на все сайты, у каждого свои имена; ставится и проверяется отсюда. -->
+    <details class="border-b border-line">
+      <summary class="cursor-pointer select-none px-3 py-2 text-xs hover:bg-sunk">
+        <span class="font-semibold text-ink">Единый счётчик</span>
+        <span class="text-ink-3">· файлы для сайта и проверка связи сайт → панель</span>
+      </summary>
+      <div class="px-3 pb-3 text-xs text-ink-2">
+        <p class="mb-2 max-w-4xl">
+          Один и тот же счётчик для всех сайтов: просмотры с источником (Google, Bing, ИИ, прямые…), время на странице, нажатия и
+          переход к оплате. У каждого сайта свои имена переменных, полей и свой адрес событий — снаружи сайты не связать. В браузер
+          ничего не пишется; вместо IP — код посетителя, один и тот же у человека весь день (отказы и источник оплаты считаются верно).
+        </p>
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+          <select class="pii input h-7 w-auto text-xs" bind:value={kitHost} onchange={() => { kit = null; ping = null; }} aria-label="Сайт">
+            <option value="">— сайт —</option>
+            {#each data.hosts as h (h)}<option value={h}>{h}</option>{/each}
+          </select>
+          <input class="input h-7 w-44 text-xs" bind:value={kitEvents} placeholder="адрес событий, напр. /segnale/" aria-label="Адрес событий на сайте" title="Свой адрес сайта для событий счётчика, словом языка сайта. Пусто — панель придумает сама" />
+          <button type="button" class="btn btn-sec btn-sm" disabled={!kitHost} onclick={loadKit}>Показать код</button>
+          <button type="button" class="btn btn-pri btn-sm" disabled={!kitHost || pingBusy} onclick={runPing}>{pingBusy ? 'Проверяю…' : 'Проверить сайт'}</button>
+        </div>
+        {#if kitErr}<p class="mb-2 text-bad">{kitErr}</p>{/if}
+        {#if ping}
+          <p class="mb-2 rounded border px-2 py-1.5 {ping.step === 'ok' ? 'border-up/40 bg-up/10 text-ink' : 'border-warn bg-warn-t text-ink'}">
+            <span class="font-semibold">{ping.step === 'ok' ? 'Работает.' : 'Не работает.'}</span> {PING_TEXT[ping.step] ?? ping.step}
+            {#if ping.target}<span class="pii text-ink-3"> · {ping.target}{ping.status ? ` · ответ ${ping.status}` : ''}{ping.detail ? ` · ${ping.detail}` : ''}</span>{/if}
+          </p>
+        {/if}
+        {#if kit}
+          <ol class="mb-2 ml-4 list-decimal space-y-0.5">
+            <li>Код страницы — в конец общего JS сайта (файла, который есть на каждой странице). Он шлёт события на <code class="pii">{kit.events}</code>.</li>
+            <li><code>gsc-counter.js</code> — в корень репозитория; в <code>functions/_middleware.js</code>: <code>import {'{'} gscCounter {'}'} from '../gsc-counter.js';</code> и <code>export const onRequest = [gscCounter, …свой middleware…];</code> (своего нет — <code>export {'{'} onRequest {'}'} from '../gsc-counter.js';</code>). Если у сайта есть <code>_routes.json</code> — добавить в него <code class="pii">{kit.events}</code> и адрес перехода к кассе.</li>
+            <li>Секрет Cloudflare Pages <code>COUNTER_KEY</code> — тот же ключ, что везде.</li>
+            <li>Старый счётчик сайта убрать целиком (код на странице, пересылку и подсчёт перехода к оплате) — иначе посчитает дважды.</li>
+            <li>Выложить и нажать «Проверить сайт».</li>
+          </ol>
+          <div class="grid gap-2 lg:grid-cols-2">
+            {#each [['Код страницы', kit.page, 'page'], ['gsc-counter.js (сервер)', kit.module, 'module']] as [title, code, f] (f)}
+              <div>
+                <div class="mb-1 flex items-center gap-2">
+                  <span class="font-semibold text-ink">{title}</span>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick={() => copy(code, f)}>{copied === f ? 'Скопировано ✓' : 'Копировать'}</button>
+                  <a class="btn btn-ghost btn-sm" href="/clicks/kit?{kitQuery()}&f={f}">Скачать</a>
+                </div>
+                <textarea readonly class="pii input h-40 w-full py-1 font-mono text-[11px]">{code}</textarea>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </details>
 
     {#if sites.length === 0}
       <p class="p-3 text-ink-3">В выбранных консолях нет сайтов. Отметьте консоль в шапке («Консоли»).</p>

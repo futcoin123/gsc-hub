@@ -8,6 +8,17 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Unified counter.** One counter for every site instead of hand-written ones:
+  the panel gives a site its page code (appended to the site's own JS) and
+  `gsc-counter.js` for Pages Functions (Buttons → "Единый счётчик", or
+  `node scripts/counter-kit.mjs`). Each site gets its own variable, field and
+  event-path names, so sites cannot be linked from outside; nothing is stored in
+  the browser. It counts views with their source (Google, Bing, AI, direct,
+  utm), time, clicks and checkouts (a redirect to the checkout after a click on
+  the site). The visitor code is an HMAC of the key over the date and IP — the
+  same all day on every Cloudflare server, so bounces and checkout sources are
+  right (the old per-server salt made a second page look like a new visit).
+  "Проверить сайт" checks the site → panel link without adding events.
 - **Buttons → "Проверка счётчиков" (counter check).** The panel keeps a log of
   counter events it receives: per site, what was accepted and what was dropped
   and why (wrong site key, site in no connected console, bot, malformed event,
@@ -33,6 +44,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Counter: events with a valid key are accepted from sites not yet in Search
+  Console.** Only the owner's sites have the key; such events used to be dropped,
+  leaving new sites at zero. Counter check: a site nobody has visited since the
+  log started shows "ждём посетителей" instead of a problem.
 - **Buttons page: the table fits the screen and its top rows stick.** Long
   column titles wrap to two lines and cells are tighter, so the last columns no
   longer run off the edge. Column titles and the total row stick under the
