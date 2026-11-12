@@ -7,6 +7,23 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **"Без консоли" — a separate section for sites that are not in Search
+  Console.** Domains are pasted as a list, link buys run as dated campaigns, and
+  the site, anchor (or naked link) and page are typed in by hand. Once the links
+  are bought the campaign is fixed and lands in the "what was bought and when"
+  history, filterable by site; each site shows links bought and the last buy
+  date. Campaign briefs export to CSV like groups. The section does not mix with
+  Groups, Purchases or the header filter.
+- **Custom key on "Ключи сайтов".** An expanded site now has a row above the
+  table to type a key and page by hand: for key-map keys with no Google data in
+  the period, and for sites with no keys at all. The page can be a URL or a
+  `/path/` (this site only); key-map keys and pages are suggested, and a map key
+  fills in its own page. The pair goes into the group chosen in "Ключи в
+  группу"; with no group chosen the row says so next to itself, not only at the
+  top of the page. Below it are the group's pairs that are not in the table for
+  the period, with quantity and remove controls.
+
 ### Changed
 - **Every site gets its own counter file.** The Worker used to serve the same
   `/_e.js` to every site. Now the file and event paths, the names inside, the

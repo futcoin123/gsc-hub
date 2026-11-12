@@ -55,3 +55,43 @@ export function customPurchaseUrl(input: string, site: string): string {
   url.hash = '';
   return url.href;
 }
+
+/**
+ * Страница сайта, вписанная руками: полный адрес (https://site.com/page/),
+ * адрес без https:// (site.com/page/) или путь (/page/). Только страницы
+ * этого сайта (www. не в счёт); якорь #… отбрасывается.
+ */
+export function sitePageUrl(input: string, site: string): string {
+  const raw = input.trim();
+  if (!raw) throw new Error('Впишите страницу: адрес или путь, например /page/');
+  if (raw.startsWith('/') && !raw.startsWith('//')) return customPurchaseUrl(raw, site);
+  if (raw.length > 2000) throw new Error('Адрес должен быть не длиннее 2000 символов');
+  if (/[\\\u0000-\u001f\u007f]/.test(raw)) throw new Error('В адресе недопустимые символы');
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/\//, '')}`);
+  } catch {
+    throw new Error('Не похоже на адрес страницы');
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) {
+    throw new Error('Нужен адрес http(s) без логина и порта');
+  }
+  let own = '';
+  try {
+    own = siteHostname(site);
+  } catch {
+    /* битый сайт — ниже не совпадёт */
+  }
+  if (!own || siteHostname(url.href) !== own) throw new Error(`Страница должна быть на ${own || 'этом сайте'}`);
+  url.hash = '';
+  return url.href;
+}
+
+/** Анкор, вписанный руками: без лишних пробелов, 1–300 символов. */
+export function cleanAnchor(input: string): string {
+  const q = input.replace(/\s+/g, ' ').trim();
+  if (!q) throw new Error('Впишите ключ (текст ссылки)');
+  if (q.length > 300) throw new Error('Ключ длиннее 300 символов');
+  if (/^\[.*\]$/.test(q)) throw new Error('Ключ в квадратных скобках не подходит');
+  return q;
+}

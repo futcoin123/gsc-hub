@@ -10,6 +10,7 @@
   import VolumeCell from './VolumeCell.svelte';
   import PositionChart from './PositionChart.svelte';
   import NakedCell from './NakedCell.svelte';
+  import CustomKeyRow from './CustomKeyRow.svelte';
   import { siteHref } from '$lib/utils/site';
   import { bareAddress, nakedQuery, type NakedVariant } from '$lib/utils/naked';
   import { TableSort } from '$lib/table-sort.svelte';
@@ -110,6 +111,8 @@
     return out;
   });
   const notFound = $derived(keyMap && !loading ? missingKeys(keyMap, rows.map((r) => r.query)) : []);
+  // Связки из отчёта Google — «Свой ключ» показывает только те, которых здесь нет.
+  const rowKeys = $derived(new Set(rows.map((r) => itemKey(r.page, r.query))));
   let err = $state<string | null>(null);
   let other = $state<Record<string, { owners: OtherOwner[]; links: OtherLink[] }>>({});
   let otherLoading = $state(false);
@@ -271,6 +274,10 @@
         </tbody>
       </table>
     </details>
+  {/if}
+
+  {#if !loading && !err}
+    <CustomKeyRow {siteUrl} {keyMap} tableKeys={rowKeys} />
   {/if}
 
   {#if multiDay}

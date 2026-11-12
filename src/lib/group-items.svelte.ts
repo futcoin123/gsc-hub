@@ -290,6 +290,54 @@ export async function toggleItem(r: ItemRow) {
 }
 
 /**
+ * Связка «ключ + страница», вписанная руками (её может не быть в отчёте Google):
+ * в выбранную группу; если она там уже есть — ставит новое количество.
+ * Ошибку не прячет в шапку, а бросает: форма показывает её рядом с собой.
+ */
+export async function addCustomItem(r: { siteUrl: string; query: string; page: string; qty: number }): Promise<{ prev: number | null }> {
+  const g = activeGroup();
+  if (!g) throw new Error('Группа не выбрана — выберите её в строке «Ключи в группу» вверху страницы');
+  if (g.fixedAt) throw new Error(`Группа «${g.name}» зафиксирована — сначала откройте её для правок на странице «Группы»`);
+  const k = itemKey(r.page, r.query);
+  if (gi.busy.has(k)) throw new Error('Эта связка ещё сохраняется');
+  const qty = Math.max(1, Math.min(1000, Math.round(r.qty) || 1));
+  const had = gi.marks[k]?.find((m) => m.groupId === g.id) ?? null;
+  gi.busy = new Set(gi.busy).add(k);
+  try {
+    if (had) await post('/groups/items', { action: 'qty', groupId: g.id, page: r.page, query: r.query, qty });
+    else gi.groups = (await post('/groups/items', { action: 'add', groupId: g.id, item: { siteUrl: r.siteUrl, query: r.query, page: r.page, qty } })).groups;
+    const rest = (gi.marks[k] ?? []).filter((m) => m.groupId !== g.id);
+    gi.marks = { ...gi.marks, [k]: [...rest, { groupId: g.id, name: g.name, qty, at: had?.at ?? Date.now() }] };
+    gi.error = null;
+    if (lastSite) refreshHistory();
+    return { prev: had?.qty ?? null };
+  } finally {
+    const next = new Set(gi.busy);
+    next.delete(k);
+    gi.busy = next;
+  }
+}
+
+/** Связки выбранной группы на страницах этого сайта (анкорные), новые снизу. */
+export function activeItemsOfSite(siteUrl: string): { page: string; query: string; qty: number }[] {
+  const g = activeGroup();
+  const h = hostOf(siteUrl);
+  if (!g || !h) return [];
+  const out: { page: string; query: string; qty: number; at: number }[] = [];
+  for (const [k, marks] of Object.entries(gi.marks)) {
+    const m = marks.find((x) => x.groupId === g.id);
+    if (!m) continue;
+    const i = k.indexOf('\n');
+    const page = k.slice(0, i);
+    const query = k.slice(i + 1);
+    // Безанкорные ('' и [домен]) показаны в своём блоке.
+    if (!query || /^\[.*\]$/.test(query) || hostOf(page) !== h) continue;
+    out.push({ page, query, qty: m.qty, at: m.at });
+  }
+  return out.sort((a, b) => a.at - b.at).map(({ at: _a, ...x }) => x);
+}
+
+/**
  * Безанкорная ссылка на страницу (вид 'url' — текст = полный адрес, 'domain' —
  * просто адрес): добавить в выбранную группу или убрать. Количество меняется
  * через setQty({ page, query: nakedQuery(variant) }).

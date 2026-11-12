@@ -77,6 +77,10 @@ function joinSite(db: Db, groupId: number, siteUrl: string): void {
 export function addGroupItem(db: Db, groupId: number, item: NewItem): void {
   requireOpen(db, groupId);
   if (!item.query?.trim() || !item.page?.trim() || !item.siteUrl?.trim()) throw new Error('Нужны сайт, ключ и страница');
+  // Связку теперь можно вписать руками — страница только полным адресом,
+  // ключ не должен совпасть с пометкой безанкорной ссылки ([домен]).
+  if (!/^https?:\/\/[^/\s]+/i.test(item.page.trim())) throw new Error('Страница должна быть полным адресом: https://…');
+  if (item.query.trim() === nakedQuery('domain')) throw new Error('Такой ключ не подходит');
   db.prepare(
     `INSERT INTO site_group_items (group_id, site_url, query, page, position, impressions, clicks, ctr, added_at, qty, kind)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'anchor') ON CONFLICT (group_id, page, query) DO NOTHING`
@@ -196,7 +200,7 @@ export function itemMarks(
   return out;
 }
 
-const csvCell = (v: unknown): string => {
+export const csvCell = (v: unknown): string => {
   const s = v === null || v === undefined ? '' : String(v);
   // Формулы в Excel не исполняем: ячейки с = + - @ начинаем с апострофа.
   const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;

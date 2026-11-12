@@ -49,6 +49,16 @@ describe('ключи группы (закупка)', () => {
     expect(listGroupItems(db, g).map((i) => i.query)).toEqual(['wingaga promo kód']);
   });
 
+  it('свой ключ без данных Google: страница — только полным адресом', () => {
+    const g = createSiteGroup(db, '12-11-26');
+    addGroupItem(db, g, { siteUrl: 'sc-domain:fut-coins.de', query: 'fut coins', page: 'https://fut-coins.de/', qty: 5 });
+    expect(listGroupItems(db, g)[0]).toMatchObject({ query: 'fut coins', qty: 5, position: null, impressions: null, kind: 'anchor' });
+    expect(() => addGroupItem(db, g, { siteUrl: 'sc-domain:fut-coins.de', query: 'k', page: '/de/' })).toThrow(/полным адресом/);
+    expect(() => addGroupItem(db, g, { siteUrl: 'sc-domain:fut-coins.de', query: 'k', page: 'javascript:alert(1)' })).toThrow(/полным адресом/);
+    expect(() => addGroupItem(db, g, { siteUrl: 'sc-domain:fut-coins.de', query: '[домен]', page: 'https://fut-coins.de/' })).toThrow();
+    expect(listGroupItems(db, g)).toHaveLength(1);
+  });
+
   it('зафиксированную группу менять нельзя, после открытия — можно', () => {
     const g = createSiteGroup(db, 'A');
     addGroupItem(db, g, item('k1'));

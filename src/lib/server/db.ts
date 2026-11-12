@@ -394,6 +394,38 @@ CREATE TABLE IF NOT EXISTS counter_key_hosts (
   PRIMARY KEY (hash, host)
 );
 
+-- Раздел «Без консоли»: свои сайты, которых нет в Search Console, и закупки
+-- ссылок на них по датам. Отдельно от групп сайтов консолей (site_groups):
+-- ни в «Группы», ни в «Закупки», ни в фильтр шапки не попадают.
+CREATE TABLE IF NOT EXISTS manual_sites (
+  host     TEXT PRIMARY KEY,
+  added_at INTEGER NOT NULL
+);
+
+-- Кампания — закупка на дату. fixed_at — когда зафиксировали (куплено).
+CREATE TABLE IF NOT EXISTS manual_campaigns (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE,
+  date       TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  fixed_at   INTEGER
+);
+
+-- Ссылки кампании: анкор (anchor = ключ) или безанкор (anchor = '' — текстом
+-- полный адрес, '[домен]' — просто адрес), как в site_group_items.
+CREATE TABLE IF NOT EXISTS manual_links (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id INTEGER NOT NULL REFERENCES manual_campaigns(id) ON DELETE CASCADE,
+  host        TEXT NOT NULL,
+  page        TEXT NOT NULL,
+  anchor      TEXT NOT NULL,
+  kind        TEXT NOT NULL DEFAULT 'anchor',
+  qty         INTEGER NOT NULL DEFAULT 1,
+  added_at    INTEGER NOT NULL,
+  UNIQUE (campaign_id, page, anchor)
+);
+CREATE INDEX IF NOT EXISTS manual_links_host ON manual_links (host);
+
 -- Сколько секунд страницы были открыты на экране (сумма за день).
 -- Среднее время = seconds / просмотры (kind = 'view' в button_clicks).
 CREATE TABLE IF NOT EXISTS page_time (
