@@ -8,6 +8,7 @@
    only for Google updates. Numbers are mono and tabular everywhere.
    Channels are space-separated RGB so Tailwind can apply alpha. */
 :root {
+  --nav-h: 40px;           /* высота шапки; уточняет +layout.svelte */
   --bg: 246 247 249;       /* desk behind panes */
   --pane: 255 255 255;     /* working surface */
   --sunk: 250 251 252;     /* table heads, inset rows */
@@ -361,6 +362,23 @@
   .app-table tr.is-total > td {
     @apply bg-acc/15 py-2.5;
     box-shadow: inset 0 -2px 0 rgb(var(--acc) / 0.7);
+  }
+  /* Широкая таблица по ширине экрана (просьба владелицы 12.11.2026): длинные
+     названия колонок — в две строки, поля ячеек поуже. */
+  .app-table.is-fit thead th {
+    white-space: normal;
+    vertical-align: bottom;
+    line-height: 1.25;
+  }
+  .app-table.is-fit th,
+  .app-table.is-fit td {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  /* Рамка стола обычно обрезает края (overflow: hidden), а с обрезкой строки
+     таблицы не могут прилипать к шапке при прокрутке страницы. */
+  .desk.is-sticky-host {
+    overflow: visible;
   }
   /* Пустая строка между сайтами (просьба владелицы 12.11.2026): без фона,
      рамки и подсветки — просто отступ. */

@@ -25,6 +25,11 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Buttons page: the table fits the screen and its top rows stick.** Long
+  column titles wrap to two lines and cells are tighter, so the last columns no
+  longer run off the edge. Column titles and the total row stick under the
+  header while the page scrolls (they used to slide under it). The "счётчик не
+  стоит" badge stays on one line; "Просмотры страниц" explains what it counts.
 - **Header: every tab stays visible.** The email is gone from the header: an
   account icon opens a menu with the email, API, "Сервисы", Users and log out.
   The logo drops its label below 1700px, Blur loses its label, tabs are tighter.

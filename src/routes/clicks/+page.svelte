@@ -184,7 +184,7 @@
 
 <svelte:head><title>Кнопки · GSC Hub</title></svelte:head>
 
-<div class="desk">
+<div class="desk is-sticky-host">
   <section class="pane">
     <details class="border-b border-line" open={Object.keys(data.lastSeen).length === 0}>
       <summary class="cursor-pointer px-3 py-2 text-sm font-semibold">Как подключить счётчик к сайту (Cloudflare)</summary>
@@ -269,10 +269,11 @@
     {#if sites.length === 0}
       <p class="p-3 text-ink-3">В выбранных консолях нет сайтов. Отметьте консоль в шапке («Консоли»).</p>
     {:else}
-      <!-- Своя прокрутка у таблицы: названия колонок и «Итого» остаются на виду. -->
-      <div class="max-h-[calc(100vh-3.5rem)] overflow-auto">
-        <table class="app-table is-roomy">
-          <thead class="sticky top-0 z-10">
+      <!-- Названия колонок и «Итого» прилипают под шапкой панели при прокрутке
+           страницы (--nav-h — её высота). Таблица — по ширине экрана (is-fit). -->
+      <div>
+        <table class="app-table is-roomy is-fit">
+          <thead class="sticky z-10" style="top: var(--nav-h, 40px)">
             <tr>
               <SortTh {sort} k="host" label="Сайт" />
               <SortTh {sort} k="impr" label="Показы в Google" num title="Search Console за тот же период: сколько раз сайт показали в поиске" />
@@ -281,7 +282,7 @@
                 <SortTh {sort} k="bImpr" label="Показы в Bing" num title="Bing Webmaster за тот же период (Bing выкладывает данные с опозданием на 1–3 дня)" />
                 <SortTh {sort} k="bClicks" label="Клики из Bing" num title="Bing Webmaster за тот же период (Bing выкладывает данные с опозданием на 1–3 дня)" />
               {/if}
-              <SortTh {sort} k="views" label="Просмотры страниц" num title="Сколько раз открыли страницы сайта (счётчик; считается с момента обновления скрипта)" />
+              <SortTh {sort} k="views" label="Просмотры страниц" num title="Сколько раз открыли страницы сайта: каждое открытие страницы — один просмотр, в том числе переход на другую страницу сайта, обновление и «Назад». Боты не считаются. Входы на сайт (откуда пришли) — в колонках справа, остальное — переходы внутри сайта" />
               {#each SRC_COLS as [c, label, title] (c)}<SortTh {sort} k={`src_${c}` as K} {label} num {title} />{/each}
               <SortTh {sort} k="avg" label="Среднее время" num title="Сколько в среднем страница была открыта на экране (свёрнутая вкладка не считается)" />
               <SortTh {sort} k="bounce" label="Отказы" num title="Bounce rate: доля визитов, в которых посетитель открыл одну страницу и ничего не нажал (ни второй страницы, ни кнопки, ни ссылки) и ушёл. Визит — вход на сайт и всё, что было дальше без перерыва в 30 минут. Только сайты, чей счётчик передаёт, откуда пришёл посетитель; считается с 12.11.2026" />
@@ -317,8 +318,8 @@
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(s.host) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
                     {s.host}
                     <a class="inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href="https://{s.host}/" target="_blank" rel="noopener noreferrer" title="Перейти на сайт (в новой вкладке)" aria-label="Перейти на сайт {s.host}" onclick={(e) => e.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
-                    {#if !data.lastSeen[s.host]}<span class="badge badge-muted ml-1 font-normal" title="С этого сайта ещё не пришло ни одного события — маршрут Worker в Cloudflare не добавлен">счётчик не стоит</span>{/if}
-                    {#if data.noConsole.includes(s.host)}<span class="badge badge-warn ml-1 font-normal" title="Счётчик работает. Показов и кликов Google нет: консоль этого сайта отключена или Google не ответил — см. плашку вверху и страницу Accounts">нет консоли Google</span>{/if}
+                    {#if !data.lastSeen[s.host]}<span class="badge badge-muted ml-1 whitespace-nowrap font-normal" title="С этого сайта ещё не пришло ни одного события — маршрут Worker в Cloudflare не добавлен">счётчик не стоит</span>{/if}
+                    {#if data.noConsole.includes(s.host)}<span class="badge badge-warn ml-1 whitespace-nowrap font-normal" title="Счётчик работает. Показов и кликов Google нет: консоль этого сайта отключена или Google не ответил — см. плашку вверху и страницу Accounts">нет консоли Google</span>{/if}
                   </span>
                 </td>
                 {#if data.gscErr[s.host]}

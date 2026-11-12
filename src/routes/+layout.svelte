@@ -155,6 +155,18 @@
     if (!shouldCheck(update?.checkedAt ?? null, Date.now())) return;
     void checkForUpdate();
   });
+  // Высота шапки — в переменную --nav-h: закреплённые строки таблиц встают
+  // прямо под ней (шапка бывает в одну или две строки — см. перенос вкладок).
+  let navEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    if (!navEl || typeof ResizeObserver === 'undefined') return;
+    const el = navEl;
+    const set = () => document.documentElement.style.setProperty('--nav-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   $effect(() => {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('privacy-blur', blur);
@@ -178,7 +190,7 @@
 {#if user}
   <!-- Вкладки не прячутся (просьба владелицы 12.11.2026): на широком экране шапка
        в одну строку, на узком вкладки переносятся на вторую. На телефоне — прокрутка. -->
-  <header class="app-nav sticky top-0 z-30 flex min-h-10 items-center gap-1 border-b border-line bg-pane px-3">
+  <header bind:this={navEl} class="app-nav sticky top-0 z-30 flex min-h-10 items-center gap-1 border-b border-line bg-pane px-3">
     <a href="/" title="gsc-hub" class="mr-2 flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-bold text-ink sm:mr-3">
       <svg viewBox="0 0 16 16" class="h-4 w-4" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="rgb(var(--acc))"/><path d="M4 11l2.5-3 2 2L12 5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="hidden min-[1700px]:inline">gsc-hub</span>
