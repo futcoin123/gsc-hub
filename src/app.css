@@ -362,6 +362,15 @@
     @apply bg-acc/15 py-2.5;
     box-shadow: inset 0 -2px 0 rgb(var(--acc) / 0.7);
   }
+  /* Пустая строка между сайтами (просьба владелицы 12.11.2026): без фона,
+     рамки и подсветки — просто отступ. */
+  .app-table tbody tr.is-gap,
+  .app-table tbody tr.is-gap:hover {
+    @apply border-0 bg-pane;
+  }
+  .app-table tbody tr.is-gap > td {
+    @apply h-5 p-0;
+  }
   .app-table tbody tr.is-hidden-row {
     @apply opacity-50;
   }

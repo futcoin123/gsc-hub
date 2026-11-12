@@ -125,11 +125,12 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {#each e.sites as s (s.siteUrl)}
+                      {#each e.sites as s, i (s.siteUrl)}
                         {@const host = p.sites.find((x) => x.siteUrl === s.siteUrl)?.host ?? s.siteUrl}
+                        {#if i > 0}<tr class="is-gap" aria-hidden="true"><td colspan="6"></td></tr>{/if}
                         <tr class="is-total">
                           <td class="pii whitespace-nowrap text-acc">{host}</td>
-                          <td class="text-xs font-normal text-ink-2">весь сайт</td>
+                          <td class="text-xs font-normal text-ink-2" title="Все запросы и все страницы сайта; позиция — средняя, взвешенная по показам. Это не итог строк ниже: у сайта есть и другие страницы и запросы, и они тоже двигают среднюю">весь сайт</td>
                           <td class="num app-num">{s.links}</td>
                           {#if s.error}
                             <td colspan="3" class="text-xs text-bad">{s.error}</td>
@@ -142,7 +143,7 @@
                         {#each s.items as it (it.id)}
                           <tr>
                             <td class="pii pl-6 font-medium"><a class="hover:text-acc hover:underline" href={it.page} target="_blank" rel="noopener noreferrer" title="Страница: {it.page}">{it.text}</a></td>
-                            <td class="text-xs text-ink-2">{it.kind === 'naked' ? NAKED_LABEL[it.variant ?? 'url'] : 'Анкор'}</td>
+                            <td class="text-xs text-ink-2" title={it.kind === 'naked' ? 'Безанкорная ссылка — цифры всей страницы, куда она ведёт (все её запросы). У двух безанкорных на одну страницу цифры одинаковые' : 'Этот запрос на странице, куда ведёт ссылка'}>{it.kind === 'naked' ? NAKED_LABEL[it.variant ?? 'url'] : 'Анкор'}</td>
                             <td class="num app-num">{it.qty}</td>
                             {#if !s.error}
                               {@render posCell(it.before.position, it.after?.position, !!e.after)}

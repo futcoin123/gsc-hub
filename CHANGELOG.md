@@ -25,6 +25,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Purchases: a blank row between sites** so they do not run together. The
+  "весь сайт" row and naked links explain what they measure on hover: the site
+  row is every query and page of the site (not a total of the rows below), a
+  naked link is its whole target page.
 - **Every site gets its own counter file.** The Worker used to serve the same
   `/_e.js` to every site. Now the file and event paths, the names inside, the
   field names and the code order differ per site: the panel derives them from
