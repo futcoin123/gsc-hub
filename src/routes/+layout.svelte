@@ -6,6 +6,7 @@
   import { page } from '$app/state';
   import ConsolePicker from '$lib/components/ConsolePicker.svelte';
   import GroupPicker from '$lib/components/GroupPicker.svelte';
+  import AccountMenu from '$lib/components/AccountMenu.svelte';
   import { RELEASES_LATEST_URL, isNewer, releaseUrl, shouldCheck } from '$lib/version';
 
   const NAV = [
@@ -21,9 +22,12 @@
     { href: '/manual-sites', label: 'Без консоли', title: 'Сайты, которых нет в Search Console: кампании по датам, ключи и страницы руками, история закупок' },
     // «Events» убран из меню по просьбе владелицы; страница /events работает по прямой ссылке.
     // «MagicLinks» убран из меню по просьбе владелицы; страница /magiclinks работает по прямой ссылке.
+  ];
+  // Редкие разделы — в меню аккаунта (значок справа), чтобы вкладки помещались в шапку.
+  const ACCOUNT_LINKS = [
     { href: '/api', label: 'API', title: 'API-ключи и документация для агентов' },
     { href: '/settings/integrations', label: 'Сервисы', title: 'Внешние сервисы и API-ключи: индексаторы, DataForSEO' },
-    { href: '/admin/users', label: 'Users' }
+    { href: '/admin/users', label: 'Users', title: 'Пользователи панели и роли' }
   ];
   // Longest matching prefix wins, so /properties/striking lights Portfolio, not Sites.
   const activeHref = $derived.by(() => {
@@ -172,13 +176,15 @@
 {/if}
 
 {#if user}
-  <header class="app-nav sticky top-0 z-30 flex h-10 items-center gap-1 border-b border-line bg-pane px-3">
-    <a href="/" class="mr-2 flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-bold text-ink sm:mr-3">
+  <!-- Вкладки не прячутся (просьба владелицы 12.11.2026): на широком экране шапка
+       в одну строку, на узком вкладки переносятся на вторую. На телефоне — прокрутка. -->
+  <header class="app-nav sticky top-0 z-30 flex min-h-10 items-center gap-1 border-b border-line bg-pane px-3">
+    <a href="/" title="gsc-hub" class="mr-2 flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-bold text-ink sm:mr-3">
       <svg viewBox="0 0 16 16" class="h-4 w-4" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="rgb(var(--acc))"/><path d="M4 11l2.5-3 2 2L12 5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      gsc-hub
+      <span class="hidden min-[1700px]:inline">gsc-hub</span>
     </a>
     {#if isAdmin}
-      <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto pr-4 [scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)]">
+      <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto pr-4 [scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)] lg:flex-wrap lg:overflow-visible lg:py-1">
         {#each NAV as item (item.href)}
           <a href={item.href} title={item.title} class="nav-link" class:is-active={isActive(item.href)}
             aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}{#if item.href === '/uptime' && data?.uptimeErrors}<span class="ml-1 rounded bg-dn px-1 text-[10px] font-semibold text-white" title="Сайтов с ошибкой">{data.uptimeErrors}</span>{/if}</a>
@@ -198,11 +204,12 @@
           {#if blur}<path d="M2 2l12 12M6.6 6.6a2 2 0 0 0 2.8 2.8M4.3 4.4C2.8 5.4 1.8 7 1.5 8c.8 2.2 3.3 4.5 6.5 4.5 1.3 0 2.5-.4 3.5-1M7 3.6c.3 0 .7-.1 1-.1 3.2 0 5.7 2.3 6.5 4.5-.3.8-.8 1.6-1.4 2.3"/>
           {:else}<path d="M1.5 8C2.3 5.8 4.8 3.5 8 3.5s5.7 2.3 6.5 4.5c-.8 2.2-3.3 4.5-6.5 4.5S2.3 10.2 1.5 8z"/><circle cx="8" cy="8" r="2"/>{/if}
         </svg>
-        <span class="hidden sm:inline">Blur</span>
+        <span class="hidden min-[1800px]:inline">Blur</span>
       </button>
       <span class="app-toolbar-divider hidden sm:block" aria-hidden="true"></span>
-      <span class="pii hidden text-xs text-ink-3 sm:inline">{user.email} · {user.role}</span>
-      <form method="POST" action="/logout"><button class="btn btn-ghost btn-sm">Выйти</button></form>
+      <!-- Почта, редкие разделы и «Выйти» — в меню под значком (просьба
+           владелицы 12.11.2026: вкладки не помещались в шапку). -->
+      <AccountMenu email={user.email} role={user.role} links={isAdmin ? ACCOUNT_LINKS : []} path={page.url.pathname} />
     </div>
   </header>
 {/if}
@@ -263,7 +270,7 @@
     display: inline-flex;
     align-items: center;
     height: 28px;
-    padding: 0 10px;
+    padding: 0 8px;
     border-radius: 4px;
     font-size: 12.5px;
     white-space: nowrap;

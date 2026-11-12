@@ -25,6 +25,11 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Header: every tab stays visible.** The email is gone from the header: an
+  account icon opens a menu with the email, API, "Сервисы", Users and log out.
+  The logo drops its label below 1700px, Blur loses its label, tabs are tighter.
+  When the tabs still do not fit (windows under ~1500px) they wrap to a second
+  row instead of hiding.
 - **Purchases: a blank row between sites** so they do not run together. The
   "весь сайт" row and naked links explain what they measure on hover: the site
   row is every query and page of the site (not a total of the rows below), a
