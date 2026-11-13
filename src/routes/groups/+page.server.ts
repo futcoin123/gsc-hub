@@ -18,7 +18,7 @@ import {
 import { listGroupItems, setGroupFixed, removeGroupItemById, todayGroupName, addNakedItem, setItemQtyById, groupOverlaps } from '$lib/server/group-items';
 import { siteHostname } from '$lib/utils/url-filters';
 import { getSiteViewSettings } from '$lib/server/site-view-settings';
-import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
+import { seedSiteLabels, siteLabels, labelGeoKeys } from '$lib/server/site-labels';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
@@ -67,7 +67,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         sources: sources.sort((a, b) => b.rank - a.rank).map(({ rank: _x, ...src }) => src)
       })).sort((a, b) => a.host.localeCompare(b.host)),
     siteErrors: errors.map((e) => ({ account: e.accountEmail, reason: e.reason })),
-    labels: siteLabels(db())
+    labels: siteLabels(db()),
+    geoKeys: labelGeoKeys(db())
   };
 };
 

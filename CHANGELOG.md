@@ -8,6 +8,11 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Country keywords in the group brief.** Each country block header lists up
+  to 10 keywords of that country from the FUT key map (main keys of the
+  country's sites first, then secondary keys and their variants); the CSV gets
+  a "Ключи гео" column. futcoin label only for now. Position, impressions,
+  clicks and CTR are dropped from the CSV.
 - **Site labels.** Every site can carry a project label: all sites in the
   panel on 13 Nov 2026 got `futcoin`, new sites come without one. The label
   shows in site keys (next to the site), in groups (group sites and the brief)

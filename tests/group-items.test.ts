@@ -108,8 +108,8 @@ describe('ключи группы (закупка)', () => {
     const csv = groupItemsCsv('28-10-26', listGroupItems(db, g));
     expect(csv.startsWith('﻿')).toBe(true);
     const [head, row] = csv.slice(1).split('\r\n');
-    expect(head).toBe('Группа;Метка;Сайт;Тип;Страница;Анкор;Кол-во ссылок;Позиция;Показы;Клики;CTR %;Язык;Гео');
-    expect(row).toBe('28-10-26;;sc-domain:a.com;Анкор;https://a.com/p/;"\'=HYPERLINK(""x"")";1;7,3;23;1;4,3;;');
+    expect(head).toBe('Группа;Метка;Сайт;Тип;Страница;Анкор;Кол-во ссылок;Язык;Гео;Ключи гео');
+    expect(row).toBe('28-10-26;;sc-domain:a.com;Анкор;https://a.com/p/;"\'=HYPERLINK(""x"")";1;;;');
   });
 
   it('количество ссылок: по умолчанию 1, меняется, ограничено 1..1000', () => {
@@ -135,7 +135,7 @@ describe('ключи группы (закупка)', () => {
     // Пометка безанкорной ссылки — с пустым ключом: с ключами не путается.
     expect(Object.keys(itemMarks(db))).toEqual(['https://a.com/\n']);
     const csv = groupItemsCsv('A', listGroupItems(db, g)).slice(1).split('\r\n')[1];
-    expect(csv).toBe('A;;sc-domain:a.com;Безанкор (URL);https://a.com/;https://a.com/;5;;;;;;');
+    expect(csv).toBe('A;;sc-domain:a.com;Безанкор (URL);https://a.com/;https://a.com/;5;;;');
   });
 
   it('безанкорные двух видов: полный адрес и просто домен — разные строки', () => {
@@ -150,8 +150,8 @@ describe('ключи группы (закупка)', () => {
       ['https://a.com/it/', '[домен]', 1]
     ]);
     const csv = groupItemsCsv('A', rows).slice(1).split('\r\n');
-    expect(csv[2]).toBe('A;;sc-domain:a.com;Безанкор (домен);https://a.com/;a.com;1;;;;;;');
-    expect(csv[3]).toBe('A;;sc-domain:a.com;Безанкор (домен);https://a.com/it/;a.com/it/;1;;;;;;');
+    expect(csv[2]).toBe('A;;sc-domain:a.com;Безанкор (домен);https://a.com/;a.com;1;;;');
+    expect(csv[3]).toBe('A;;sc-domain:a.com;Безанкор (домен);https://a.com/it/;a.com/it/;1;;;');
   });
 
   it('ТЗ в CSV: блоками по метке сайта, внутри — по стране', () => {
@@ -172,14 +172,15 @@ describe('ключи группы (закупка)', () => {
       'https://new-site.com/': { language: 'English', geo: 'Global' }
     };
     const labels = { 'wowgold.co.uk': 'wow', 'fut-coins.nl': 'futcoin', 'futcoin.it': 'futcoin', 'fccoins.es': 'futcoin' };
-    const rows = groupItemsCsv('13-11-26', listGroupItems(db, g), locale, labels).slice(1).trim().split('\r\n').slice(1).map((l) => l.split(';'));
-    expect(rows.map((r) => [r[1], r[12], r[5]])).toEqual([
-      ['futcoin', 'Italy', 'crediti fc 27'],
-      ['futcoin', 'Italy', 'a'],
-      ['futcoin', 'Netherlands', 'fut coins'],
-      ['futcoin', 'Spain', 'monedas fc'],
-      ['wow', 'United Kingdom', 'buy wow gold'],
-      ['', 'Global', 'x']
+    const geoKeys = { futcoin: { Italy: ['crediti fc 27', 'fifa coins'], Spain: ['monedas fc'] } };
+    const rows = groupItemsCsv('13-11-26', listGroupItems(db, g), locale, labels, geoKeys).slice(1).trim().split('\r\n').slice(1).map((l) => l.split(';'));
+    expect(rows.map((r) => [r[1], r[8], r[5], r[9]])).toEqual([
+      ['futcoin', 'Italy', 'crediti fc 27', 'crediti fc 27, fifa coins'],
+      ['futcoin', 'Italy', 'a', 'crediti fc 27, fifa coins'],
+      ['futcoin', 'Netherlands', 'fut coins', ''],
+      ['futcoin', 'Spain', 'monedas fc', 'monedas fc'],
+      ['wow', 'United Kingdom', 'buy wow gold', ''],
+      ['', 'Global', 'x', '']
     ]);
   });
 

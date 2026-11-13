@@ -80,3 +80,39 @@ export function missingKeys(pages: MapPage[], queries: string[]): MapPage[] {
   const qw = new Set(queries.map(wordsOf));
   return pages.filter((p) => ![p.key, ...p.alts].some((k) => qs.has(normKey(k)) || qw.has(wordsOf(k))));
 }
+
+/** Сколько ключей на страну идёт в ТЗ группы. */
+export const GEO_KEYS = 10;
+
+/**
+ * Ключи под страну для ТЗ группы (просьба владелицы 13.11.2026: «на одну гео
+ * хотя бы 5–10 ключей, любые, как они там звучат»): из «Карты ключей FUT» —
+ * сначала главные ключи сайтов этой страны, потом второстепенные, потом их
+ * варианты; без повторов. Страна — названием, как колонка «Гео» (Italy…).
+ */
+export function geoKeywords(map: Map<string, MapPage[]>, n = GEO_KEYS): Record<string, string[]> {
+  const pools = new Map<string, { main: string[]; secondary: string[]; alts: string[] }>();
+  for (const pages of map.values()) {
+    for (const p of pages) {
+      const geo = mapGeo(p.country);
+      const pool = pools.get(geo) ?? { main: [], secondary: [], alts: [] };
+      pool[p.role].push(p.key);
+      pool.alts.push(...p.alts);
+      pools.set(geo, pool);
+    }
+  }
+  const out: Record<string, string[]> = {};
+  for (const [geo, pool] of pools) {
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const k of [...pool.main, ...pool.secondary, ...pool.alts]) {
+      const nk = normKey(k);
+      if (!nk || seen.has(nk)) continue;
+      seen.add(nk);
+      keys.push(k.trim());
+      if (keys.length >= n) break;
+    }
+    out[geo] = keys;
+  }
+  return out;
+}

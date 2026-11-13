@@ -5,7 +5,7 @@ import { requireAdmin } from '$lib/server/guard';
 import { getSiteGroup } from '$lib/server/site-groups';
 import { listGroupItems, groupItemsCsv } from '$lib/server/group-items';
 import { localesFor } from '$lib/server/site-locale';
-import { siteLabels } from '$lib/server/site-labels';
+import { siteLabels, labelGeoKeys } from '$lib/server/site-labels';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
   requireAdmin(locals);
@@ -15,7 +15,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   const items = listGroupItems(db(), g.id);
   // Язык и гео каждой страницы — для биржи ссылок (названия как в её списках).
   const locale = await localesFor(db(), [...new Set(items.map((i) => i.page))]).catch(() => ({}));
-  return new Response(groupItemsCsv(g.name, items, locale, siteLabels(db())), {
+  return new Response(groupItemsCsv(g.name, items, locale, siteLabels(db()), labelGeoKeys(db())), {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
       'content-disposition': `attachment; filename="group.csv"; filename*=UTF-8''${encodeURIComponent(name)}`

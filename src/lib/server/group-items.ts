@@ -216,9 +216,12 @@ export function groupItemsCsv(
   groupName: string,
   items: GroupItem[],
   locale: Record<string, { language: string | null; geo: string }> = {},
-  labels: Record<string, string> = {}
+  labels: Record<string, string> = {},
+  geoKeys: Record<string, Record<string, string[]>> = {}
 ): string {
-  const head = ['Группа', 'Метка', 'Сайт', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %', 'Язык', 'Гео'];
+  // Для биржи ссылок (владелица 13.11.2026): метка, сайт, анкор, сколько,
+  // язык, гео и ключи под эту страну; позиции, показы и клики ей не нужны.
+  const head = ['Группа', 'Метка', 'Сайт', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Язык', 'Гео', 'Ключи гео'];
   // Как ТЗ на странице группы: по метке сайта, внутри — по стране (blockCompare).
   const labelOf = (i: GroupItem) => labels[labelKey(i.siteUrl)] ?? null;
   const row = (i: GroupItem) => ({ label: labelOf(i), geo: locale[i.page]?.geo ?? null, site: labelKey(i.siteUrl), page: i.page, query: i.query });
@@ -232,12 +235,9 @@ export function groupItemsCsv(
       i.page,
       i.kind === 'naked' ? nakedAnchor(i.page, i.query) : i.query,
       i.qty,
-      i.position === null ? '' : i.position.toFixed(1).replace('.', ','),
-      i.impressions ?? '',
-      i.clicks ?? '',
-      i.ctr === null ? '' : (i.ctr * 100).toFixed(1).replace('.', ','),
       locale[i.page]?.language ?? '',
-      locale[i.page]?.geo ?? ''
+      locale[i.page]?.geo ?? '',
+      (geoKeys[labelOf(i) ?? '']?.[locale[i.page]?.geo ?? ''] ?? []).join(', ')
     ]
       .map(csvCell)
       .join(';')

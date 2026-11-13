@@ -4,6 +4,8 @@
 import type { Db } from './db';
 import { listAllKnownSites } from './google';
 import { labelKey } from '$lib/utils/site-label';
+import { keyMapAll } from './key-map';
+import { geoKeywords } from '$lib/utils/key-map';
 
 /** Метка всех сайтов, которые были в панели на 13.11.2026. */
 export const FIRST_LABEL = 'futcoin';
@@ -68,4 +70,16 @@ export async function seedSiteLabels(db: Db, now = Date.now()): Promise<void> {
   // Отметку ставим до записи: две страницы, открытые разом, не посеют дважды.
   if (db.prepare('INSERT OR IGNORE INTO schema_marks (name) VALUES (?)').run(SEED_MARK).changes === 0) return;
   labelAll(db, hosts, FIRST_LABEL, now);
+}
+
+/**
+ * Ключи под страну для ТЗ группы: метка → страна → ключи. Для «futcoin» — из
+ * «Карты ключей FUT»; у других проектов (WoW…) своего источника пока нет.
+ */
+export function labelGeoKeys(db: Db): Record<string, Record<string, string[]>> {
+  try {
+    return { [FIRST_LABEL]: geoKeywords(keyMapAll(db)) };
+  } catch {
+    return {};
+  }
 }

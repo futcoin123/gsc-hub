@@ -654,7 +654,8 @@
                       <tr class="tz-label"><td colspan={group.fixedAt ? 12 : 13}>{blk.label} <span class="font-normal text-ink-3">· {blk.labelQty} ссыл.</span></td></tr>
                     {/if}
                     {#if blk}
-                      <tr class="tz-geo"><td colspan={group.fixedAt ? 12 : 13}>{blk.label ?? labelOf(it.siteUrl) ?? 'без метки'} · {blk.geo} <span class="text-ink-3">· {blk.geoQty} ссыл.</span></td></tr>
+                      {@const gk = data.geoKeys[labelOf(it.siteUrl) ?? '']?.[blk.geo] ?? []}
+                      <tr class="tz-geo"><td colspan={group.fixedAt ? 12 : 13}>{blk.label ?? labelOf(it.siteUrl) ?? 'без метки'} · {blk.geo} <span class="text-ink-3">· {blk.geoQty} ссыл.</span>{#if gk.length}<span class="tz-geo-keys" title="Ключи под эту страну — из «Карты ключей FUT»; уходят в CSV колонкой «Ключи гео»"> · ключи гео: <span class="pii">{gk.join(', ')}</span></span>{/if}</td></tr>
                     {/if}
                     <tr class:is-selected={tzPicked.has(it.id)}>
                       {#if !group.fixedAt}<td><input type="checkbox" checked={tzPicked.has(it.id)} aria-label="Отметить строку" onchange={() => tzPick(it.id)} /></td>{/if}
@@ -723,5 +724,10 @@
     font-weight: 500;
     color: rgb(var(--ink-2));
     background: rgb(var(--sunk));
+    white-space: normal;
+  }
+  .tz-geo-keys {
+    font-weight: 400;
+    color: rgb(var(--ink-2));
   }
 </style>

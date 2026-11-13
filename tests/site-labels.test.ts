@@ -58,3 +58,19 @@ describe('метки сайтов', () => {
     ]);
   });
 });
+
+describe('ключи под страну', () => {
+  it('сначала главные ключи страны, потом второстепенные и варианты; без повторов; не больше 10', async () => {
+    const { geoKeywords } = await import('../src/lib/utils/key-map');
+    const p = (country: string, key: string, role: 'main' | 'secondary', alts: string[] = []) => ({ country, url: '/', key, role, alts });
+    const map = new Map([
+      ['futcoin.it', [p('IT', 'crediti fc 27', 'main', ['crediti fc27']), p('IT', 'crediti fifa 27', 'secondary')]],
+      ['coins-fc.it', [p('IT', 'fifa coins', 'main'), p('IT', 'Crediti FC 27', 'secondary')]],
+      ['fut-coins.nl', [p('NL', 'fut coins', 'main'), ...Array.from({ length: 12 }, (_, i) => p('NL', `k${i}`, 'secondary'))]]
+    ]);
+    const g = geoKeywords(map);
+    expect(g.Italy).toEqual(['crediti fc 27', 'fifa coins', 'crediti fifa 27', 'crediti fc27']);
+    expect(g.Netherlands).toHaveLength(10);
+    expect(g.Netherlands[0]).toBe('fut coins');
+  });
+});
