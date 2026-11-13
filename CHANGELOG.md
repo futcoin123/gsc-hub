@@ -44,6 +44,12 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Sticky column headers in every table.** When a long list scrolls, the
+  column header row stays under the panel header on every page, not only on
+  Buttons. Tables inside horizontal-scroll frames (Purchases, Keywords,
+  Properties…) included: a small script moves their header
+  (`src/lib/sticky-heads.ts`). In fixed-height boxes the header sticks to the
+  top of the box.
 - **Purchases: "after" follows the header period.** The report used to ignore
   the period switch and always averaged from the day after the purchase to the
   last complete Google day, so Today, Yesterday and 7 days showed the same

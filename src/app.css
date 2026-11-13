@@ -154,8 +154,10 @@
   }
   /* Desk: panes joined edge to edge, split by 1px lines; the gray shows only as
      the outer frame. Columns inside are flex stacks whose last pane fills. */
+  /* overflow: clip, а не hidden: обрезает так же, но не делает рамку
+     прокручиваемой — иначе названия колонок таблиц внутри не прилипают к окну. */
   .desk {
-    @apply grid gap-px overflow-hidden rounded border border-line bg-line;
+    @apply grid gap-px overflow-clip rounded border border-line bg-line;
   }
   .desk-col {
     @apply flex min-w-0 flex-col gap-px;
@@ -379,6 +381,29 @@
      таблицы не могут прилипать к шапке при прокрутке страницы. */
   .desk.is-sticky-host {
     overflow: visible;
+  }
+  /* Названия колонок прилипают под шапкой панели (src/lib/sticky-heads.ts,
+     просьба владелицы 13.11.2026). is-stick — обычный sticky; is-float —
+     таблица в рамке с горизонтальной прокруткой, шапку сдвигает скрипт. */
+  .app-table.is-stick > thead {
+    position: sticky;
+    top: var(--nav-h, 40px);
+    z-index: 10;
+  }
+  .app-table.is-float > thead {
+    position: relative;
+    z-index: 10;
+  }
+  .app-table.is-box > thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  /* Линия под прилипшей шапкой — тенью: в border-collapse рамка ячейки уезжает. */
+  .app-table.is-stick > thead > tr > th,
+  .app-table.is-float > thead > tr > th,
+  .app-table.is-box > thead > tr > th {
+    box-shadow: inset 0 -1px 0 rgb(var(--line));
   }
   /* Пустая строка между сайтами (просьба владелицы 12.11.2026): без фона,
      рамки и подсветки — просто отступ. */

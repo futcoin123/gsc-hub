@@ -8,6 +8,7 @@
   import GroupPicker from '$lib/components/GroupPicker.svelte';
   import AccountMenu from '$lib/components/AccountMenu.svelte';
   import { RELEASES_LATEST_URL, isNewer, releaseUrl, shouldCheck } from '$lib/version';
+  import { stickyHeads } from '$lib/sticky-heads';
 
   const NAV = [
     { href: '/dashboard', label: 'Dashboard' },
@@ -166,6 +167,12 @@
     const ro = new ResizeObserver(set);
     ro.observe(el);
     return () => ro.disconnect();
+  });
+  // Названия колонок всех таблиц прилипают под шапкой при прокрутке.
+  const signedIn = $derived(!!data?.user);
+  $effect(() => {
+    if (!signedIn) return;
+    return stickyHeads();
   });
   $effect(() => {
     if (typeof document === 'undefined') return;
