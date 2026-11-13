@@ -156,3 +156,28 @@ describe('проверка счётчиков: с последней удачн�
     expect(counterVerdict(c.rows, (ts) => String(ts), c.since)[0].level).toBe('bad');
   });
 });
+
+describe('переход к оплате без просмотра', () => {
+  const H = 3600_000;
+  it('засчитывается, только если тот же посетитель до этого был на сайте', async () => {
+    const { checkoutHasVisit, markSeen } = await import('../src/lib/server/button-clicks');
+    const started = Date.UTC(2026, 10, 13, 6, 0);
+    const now = started + 5 * H; // панель работает давно
+    expect(checkoutHasVisit('v-test', 'fut-coins.nl', now, started)).toBe(false); // проверка сайта: сразу кнопка
+    markSeen('v-buyer', 'fut-coins.nl', now - 10 * 60_000);
+    expect(checkoutHasVisit('v-buyer', 'fut-coins.nl', now, started)).toBe(true); // смотрел страницу 10 минут назад
+    expect(checkoutHasVisit('v-buyer', 'futcoin.it', now, started)).toBe(false); // на другом сайте не был
+    expect(checkoutHasVisit('v-old', 'fut-coins.nl', now, started)).toBe(false);
+    markSeen('v-old', 'fut-coins.nl', now - 4 * H);
+    expect(checkoutHasVisit('v-old', 'fut-coins.nl', now, started)).toBe(false); // слишком давно
+    // Панель только что перезапущена: о прошлых просмотрах не знает — не отбрасываем.
+    expect(checkoutHasVisit('v-new', 'fut-coins.nl', started + 10 * 60_000, started)).toBe(true);
+  });
+
+  it('по одному-двум просмотрам отсутствие времени — не поломка', () => {
+    const few = [{ kind: 'view', outcome: 'ok', n: 2, lastAt: 1 }];
+    expect(counterVerdict(few, String)[0].level).toBe('ok');
+    const many = [{ kind: 'view', outcome: 'ok', n: 9, lastAt: 1 }];
+    expect(counterVerdict(many, String).some((f) => f.level === 'warn' && f.text.includes('Время на странице не приходит'))).toBe(true);
+  });
+});

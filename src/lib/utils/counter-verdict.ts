@@ -16,6 +16,9 @@ export interface Finding {
   text: string;
 }
 
+/** С какого числа просмотров отсутствие времени на странице — уже признак поломки. */
+export const MIN_VIEWS_FOR_TIME = 5;
+
 const sum = (rows: CounterLogRow[], f: (r: CounterLogRow) => boolean) => rows.filter(f).reduce((a, r) => a + r.n, 0);
 const last = (rows: CounterLogRow[], f: (r: CounterLogRow) => boolean) => rows.filter(f).reduce((a, r) => Math.max(a, r.lastAt), 0);
 
@@ -44,7 +47,9 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
   if (accepted && !views) out.push({ level: 'bad', text: `Просмотры не приходят — только ${[ok('submit') && 'переходы к оплате', ok('click') && 'нажатия', ok('time') && 'время'].filter(Boolean).join(', ')}. Счётчик на страницах сайта не отправляет просмотр.` });
   if (ok('view-nosrc') && !ok('view')) out.push({ level: 'warn', text: 'Просмотры приходят без источника (откуда пришёл посетитель) — колонки «Из Google» … «Прочее» и «Отказы» пустые.' });
   else if (ok('view-nosrc') > ok('view')) out.push({ level: 'warn', text: `Больше половины просмотров без источника (${ok('view-nosrc')} из ${views}).` });
-  if (views && !ok('time')) out.push({ level: 'warn', text: 'Время на странице не приходит — «Среднее время» пустое.' });
+  // Время приходит, когда посетитель уходит со страницы или сворачивает её:
+  // по одному-двум просмотрам его может ещё не быть — это не поломка.
+  if (views >= MIN_VIEWS_FOR_TIME && !ok('time')) out.push({ level: 'warn', text: `Время на странице не приходит (${views} просмотров, ни одного времени) — «Среднее время» пустое.` });
 
   if (!rows.length && ping) {
     return [{ level: 'ok', text: `Связь с панелью есть: проверка прошла ${fmtTime(ping.lastAt)}. Посетителей с тех пор не было.` }];
@@ -53,7 +58,7 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
     return [{ level: 'bad', text: `Проверка связи дошла, но отброшена: ключ сайта не подходит (${fmtTime(last(tests, () => true))}). Обновите секрет COUNTER_KEY в Cloudflare.` }];
   }
   if (!out.length) {
-    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.` });
+    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.${rejected('no-visit') ? ` Не засчитано ${rejected('no-visit')} переходов к оплате без просмотра сайта (проверки сайта, роботы).` : ''}` });
   }
   return out;
 }

@@ -101,6 +101,37 @@ export function countedHosts(db: Db): Set<string> {
   return new Set(rows.map((r) => r.host));
 }
 
+// ─── Переход к оплате только после просмотра ───────────────────────────────
+// Переход к оплате единый счётчик сайта считает по 302 на кассу. Настоящий
+// покупатель сначала открывает страницу сайта (просмотр уходит при загрузке),
+// а проверки и роботы часто идут сразу на кнопку: их просмотр перехвачен или
+// не отправлен вовсе. Поэтому переход к оплате засчитывается, только если тот
+// же посетитель (код вместо IP) в последние SEEN_MS что-то прислал с этого
+// сайта. Связка живёт только в памяти панели; после перезапуска панели первые
+// SEEN_MS проверка не действует — иначе отбросили бы настоящих покупателей.
+const SEEN_MS = 3 * 3600_000;
+const seen = new Map<string, number>();
+const STARTED = Date.now();
+
+/** Посетитель прислал с сайта просмотр, время или нажатие. */
+export function markSeen(ip: string, host: string, now: number = Date.now()): void {
+  if (!ip || ip === 'worker' || ip === 'ping') return;
+  seen.set(`${ip}\n${host}`, now);
+  if (seen.size > 100_000) for (const [k, at] of seen) if (now - at > SEEN_MS) seen.delete(k);
+}
+
+/** Переход к оплате похож на настоящий: посетитель до этого был на сайте
+ *  (или панель только что перезапущена и знать этого не может). */
+export function checkoutHasVisit(ip: string, host: string, now: number = Date.now(), started: number = STARTED): boolean {
+  if (!ip || ip === 'worker') return true;
+  if (now - started < SEEN_MS) {
+    const at = seen.get(`${ip}\n${host}`);
+    return at === undefined ? true : now - at < SEEN_MS;
+  }
+  const at = seen.get(`${ip}\n${host}`);
+  return at !== undefined && now - at < SEEN_MS;
+}
+
 // ─── Переход к оплате по источнику ──────────────────────────────────────────
 // Сайт посетителю ничего не запоминает, поэтому источник перехода к оплате
 // панель берёт у входа того же посетителя (тот же адрес от Worker'а) на этот

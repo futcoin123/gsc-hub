@@ -3,7 +3,7 @@ import { db } from '$lib/server/db';
 import { listAllKnownSites } from '$lib/server/google';
 import { siteHostname } from '$lib/utils/url-filters';
 import { counterKeyOk } from '$lib/server/config';
-import { allowClick, clicksToday, countedHosts, entrySource, isBotUA, normHost, parseWorkerEvent, recordCheckoutSource, recordClick, recordTime, rememberEntry, trackVisit, workerEventInput } from '$lib/server/button-clicks';
+import { allowClick, checkoutHasVisit, clicksToday, countedHosts, entrySource, isBotUA, markSeen, normHost, parseWorkerEvent, recordCheckoutSource, recordClick, recordTime, rememberEntry, trackVisit, workerEventInput } from '$lib/server/button-clicks';
 import { logCounter, logKind, type CounterOutcome } from '$lib/server/counter-log';
 
 // Приём событий счётчика от Cloudflare Worker ваших сайтов (без входа, но с
@@ -107,6 +107,7 @@ export const POST: RequestHandler = async ({ request }) => {
     if ('time' in parsed) {
       if (allowClick(ip, { host, page: parsed.time.page, kind: 'view', label: 'time:' + Date.now(), target: '' })) {
         recordTime(db(), parsed.time);
+        markSeen(ip, host);
         log('ok');
       } else log('limit');
       return EMPTY();
@@ -115,6 +116,13 @@ export const POST: RequestHandler = async ({ request }) => {
       log('limit');
       return EMPTY();
     }
+    // Переход к оплате без единого события с сайта от того же посетителя —
+    // проверка сайта или робот (см. checkoutHasVisit): не считаем.
+    if (parsed.click.kind === 'submit' && !checkoutHasVisit(ip, host)) {
+      log('no-visit');
+      return EMPTY();
+    }
+    if (parsed.click.kind !== 'submit') markSeen(ip, host);
     recordClick(db(), parsed.click);
     log('ok');
     // Источник перехода к оплате — по входу того же посетителя (см. rememberEntry).

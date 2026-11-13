@@ -44,6 +44,14 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **A checkout counts only after a page view.** Site checks and robots often
+  press the pay button straight away, without a view being sent, and such
+  “checkouts” landed in “Went to checkout” (on 13.11 — about ten per site with
+  zero views). Now a checkout counts only if the same visitor (a code instead
+  of the IP) sent a view, time or click from that site in the last 3 hours;
+  otherwise it goes to the log as “no visit”. For the first 3 hours after the
+  panel restarts the rule is off. “Time on page is not arriving” shows only
+  with at least five views since the last link check.
 - **“Counter check” starts at the last successful link check.** The verdict
   used to cover all seven days, so after the sites moved to the unified counter
   the table would have shown the old counters' errors for a week (key does not
