@@ -10,7 +10,7 @@
   import GroupCell from '$lib/components/GroupCell.svelte';
   import IntentBadge from '$lib/components/IntentBadge.svelte';
   import LastPlanCell from '$lib/components/LastPlanCell.svelte';
-  import { loadGroupItems, gi, activeGroup, pageGroups, itemKey } from '$lib/group-items.svelte';
+  import { loadGroupItems, gi, activeGroup, keyGroups, itemKey } from '$lib/group-items.svelte';
   import { classifyIntent } from '$lib/utils/intent';
   import { onMount, untrack } from 'svelte';
   onMount(() => { loadGroupItems(); });
@@ -91,7 +91,7 @@
         }
         case 'bought': return boughtFor(r)?.quantity ?? null;
         case 'last': {
-          const l = pageGroups(r.page);
+          const l = keyGroups(r.page, r.query);
           return l.length ? l[l.length - 1].at : null;
         }
         case 'group': {

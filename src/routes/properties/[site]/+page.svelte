@@ -16,7 +16,7 @@
   import LastPlanCell from '$lib/components/LastPlanCell.svelte';
   import OtherSitesCell from '$lib/components/OtherSitesCell.svelte';
   import SiteLinkHistory from '$lib/components/SiteLinkHistory.svelte';
-  import { loadGroupItems, loadCompetition, comp, gi, activeGroup, pageGroups, itemKey } from '$lib/group-items.svelte';
+  import { loadGroupItems, loadCompetition, comp, gi, activeGroup, keyGroups, itemKey } from '$lib/group-items.svelte';
   import { classifyIntent } from '$lib/utils/intent';
   import { sortStriking, type StrikingSortKey, type SortDirection } from '$lib/utils/striking-sort';
   import { Volumes } from '$lib/volumes.svelte';
@@ -174,7 +174,7 @@
       }
       if (key === 'volume') return vols.sortValue(r.query);
       if (key === 'last') {
-        const l = pageGroups(r.page);
+        const l = keyGroups(r.page, r.query);
         return l.length ? l[l.length - 1].at : null;
       }
       // group: сколько ссылок в выбранной группе

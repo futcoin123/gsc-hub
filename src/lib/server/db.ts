@@ -407,6 +407,20 @@ CREATE TABLE IF NOT EXISTS counter_log (
   PRIMARY KEY (day, host, kind, outcome)
 );
 
+-- Посетители счётчика (код вместо IP, меняется каждый день): когда был на
+-- сайте (seen) и когда переходил к оплате (checkout). Переход к оплате
+-- засчитывается, только если посетитель до этого был на сайте, и не чаще
+-- раза в 30 минут (см. checkoutVerdict). В базе, а не в памяти: перезапуск
+-- панели не должен открывать дорогу проверкам сайтов. Хранится 3 часа.
+CREATE TABLE IF NOT EXISTS counter_visitors (
+  visitor TEXT NOT NULL,
+  host    TEXT NOT NULL,
+  kind    TEXT NOT NULL,
+  at      INTEGER NOT NULL,
+  PRIMARY KEY (visitor, host, kind)
+);
+CREATE INDEX IF NOT EXISTS counter_visitors_at ON counter_visitors(at);
+
 -- Раздел «Без консоли»: свои сайты, которых нет в Search Console, и закупки
 -- ссылок на них по датам. Отдельно от групп сайтов консолей (site_groups):
 -- ни в «Группы», ни в «Закупки», ни в фильтр шапки не попадают.

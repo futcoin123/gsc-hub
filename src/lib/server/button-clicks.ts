@@ -101,35 +101,46 @@ export function countedHosts(db: Db): Set<string> {
   return new Set(rows.map((r) => r.host));
 }
 
-// ─── Переход к оплате только после просмотра ───────────────────────────────
+// ─── Переход к оплате: после просмотра и один раз за 30 минут ───────────────
 // Переход к оплате единый счётчик сайта считает по 302 на кассу. Настоящий
 // покупатель сначала открывает страницу сайта (просмотр уходит при загрузке),
 // а проверки и роботы часто идут сразу на кнопку: их просмотр перехвачен или
 // не отправлен вовсе. Поэтому переход к оплате засчитывается, только если тот
 // же посетитель (код вместо IP) в последние SEEN_MS что-то прислал с этого
-// сайта. Связка живёт только в памяти панели; после перезапуска панели первые
-// SEEN_MS проверка не действует — иначе отбросили бы настоящих покупателей.
+// сайта. И не чаще раза в CHECKOUT_REPEAT_MS: человек, который трижды выбрал
+// пакет и вернулся, — один переход, а проверка кнопок сайта (сотни нажатий
+// подряд с одного адреса) — тоже один. Окно скользит: каждое нажатие его
+// продлевает. Связки — в базе (counter_visitors), перезапуск панели их не
+// стирает (13.11.2026: в памяти они пропадали при каждой выкладке панели, и
+// проверка кнопок fccoinsprice.com дала 143 «перехода»).
 const SEEN_MS = 3 * 3600_000;
-const seen = new Map<string, number>();
-const STARTED = Date.now();
+export const CHECKOUT_REPEAT_MS = 30 * 60_000;
+let marks = 0;
 
-/** Посетитель прислал с сайта просмотр, время или нажатие. */
-export function markSeen(ip: string, host: string, now: number = Date.now()): void {
-  if (!ip || ip === 'worker' || ip === 'ping') return;
-  seen.set(`${ip}\n${host}`, now);
-  if (seen.size > 100_000) for (const [k, at] of seen) if (now - at > SEEN_MS) seen.delete(k);
+function visitorAt(db: Db, ip: string, host: string, kind: 'seen' | 'checkout'): number | null {
+  const r = db.prepare('SELECT at FROM counter_visitors WHERE visitor = ? AND host = ? AND kind = ?').get(ip, host, kind) as { at: number } | undefined;
+  return r ? r.at : null;
+}
+function setVisitorAt(db: Db, ip: string, host: string, kind: 'seen' | 'checkout', now: number): void {
+  db.prepare('INSERT INTO counter_visitors (visitor, host, kind, at) VALUES (?, ?, ?, ?) ON CONFLICT(visitor, host, kind) DO UPDATE SET at = excluded.at').run(ip, host, kind, now);
 }
 
-/** Переход к оплате похож на настоящий: посетитель до этого был на сайте
- *  (или панель только что перезапущена и знать этого не может). */
-export function checkoutHasVisit(ip: string, host: string, now: number = Date.now(), started: number = STARTED): boolean {
-  if (!ip || ip === 'worker') return true;
-  if (now - started < SEEN_MS) {
-    const at = seen.get(`${ip}\n${host}`);
-    return at === undefined ? true : now - at < SEEN_MS;
-  }
-  const at = seen.get(`${ip}\n${host}`);
-  return at !== undefined && now - at < SEEN_MS;
+/** Посетитель прислал с сайта просмотр, время или нажатие. */
+export function markSeen(db: Db, ip: string, host: string, now: number = Date.now()): void {
+  if (!ip || ip === 'worker' || ip === 'ping') return;
+  setVisitorAt(db, ip, host, 'seen', now);
+  if (++marks % 200 === 0) db.prepare('DELETE FROM counter_visitors WHERE at < ?').run(now - SEEN_MS);
+}
+
+/** Засчитать ли переход к оплате: ok; no-visit — посетитель не был на сайте;
+ *  repeat — тот же посетитель уже переходил к оплате меньше 30 минут назад. */
+export function checkoutVerdict(db: Db, ip: string, host: string, now: number = Date.now()): 'ok' | 'no-visit' | 'repeat' {
+  if (!ip || ip === 'worker') return 'ok';
+  const seen = visitorAt(db, ip, host, 'seen');
+  if (seen === null || now - seen >= SEEN_MS) return 'no-visit';
+  const prev = visitorAt(db, ip, host, 'checkout');
+  setVisitorAt(db, ip, host, 'checkout', now);
+  return prev !== null && now - prev < CHECKOUT_REPEAT_MS ? 'repeat' : 'ok';
 }
 
 // ─── Переход к оплате по источнику ──────────────────────────────────────────

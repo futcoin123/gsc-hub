@@ -205,24 +205,25 @@ export const otherGroups = (page: string, query: string) => {
 };
 
 /**
- * Закупки ссылок на эту страницу (любым анкором и безанкорные) в других
- * группах, от старых к новым. Ссылка ведёт на страницу, а не «на ключ»: один
- * анкор бывает на страницах разных стран, поэтому считаем по странице.
+ * Закупки ссылок с этим ключом (анкором) на эту страницу в других группах,
+ * от старых к новым. По ключу и странице вместе: другой анкор на ту же
+ * страницу — не закупка этого ключа (13.11.2026: по одной странице у всех
+ * ключей главной стояло «10 шт», хотя брали один ключ).
  */
-export const pageGroups = (page: string) => {
+export const keyGroups = (page: string, query: string) => {
   const g = activeGroup();
   const norm = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '');
   const target = norm(page);
+  const q = query.trim().toLowerCase();
   const by = new Map<number, { groupId: number; name: string; qty: number; at: number; anchors: string[] }>();
   for (const [k, marks] of Object.entries(gi.marks)) {
     const i = k.indexOf('\n');
-    if (norm(k.slice(0, i)) !== target) continue;
-    const q = k.slice(i + 1);
+    if (norm(k.slice(0, i)) !== target || k.slice(i + 1).trim().toLowerCase() !== q) continue;
     for (const m of marks) {
       if (m.groupId === g?.id) continue;
       const cur = by.get(m.groupId) ?? { groupId: m.groupId, name: m.name, qty: 0, at: m.at, anchors: [] };
       cur.qty += m.qty;
-      cur.anchors.push(q && q !== '[домен]' ? q : 'безанкор');
+      cur.anchors.push(query);
       by.set(m.groupId, cur);
     }
   }

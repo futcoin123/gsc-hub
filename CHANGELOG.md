@@ -44,6 +44,16 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Checkouts are counted more honestly.** A checkout counts only if the same
+  visitor opened the site before (marks now live in the database, not in
+  memory: after every panel deploy, site tests passed as buyers for three
+  hours — fccoinsprice.com got 143 "checkouts" that way), and at most once
+  per visitor per 30 minutes: several presses by one person and hundreds of
+  presses by a button test are one checkout. Dropped ones show up in the
+  counter check ("repeat", "no-visit").
+- **"Last purchase" in site keys is per key.** The column used to list every
+  link to the page with any anchor, so each homepage key showed another key's
+  purchase. It now shows this key on this page only.
 - **Counter check on Buttons is always collapsed.** It used to open by itself
   when a site had problems; now only the "проблемы у N" badge in its title
   says so, and it opens on click.

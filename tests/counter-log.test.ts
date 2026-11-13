@@ -20,11 +20,11 @@ let dir: string;
 let key: string;
 let n = 0;
 
-async function send(h: string, e: unknown, opts: { key?: string; ua?: string } = {}) {
+async function send(h: string, e: unknown, opts: { key?: string; ua?: string; ip?: string } = {}) {
   n++;
   const request = new Request('https://panel.example/c', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-counter-key': opts.key ?? key, 'x-client-ua': opts.ua ?? UA, 'x-client-ip': `u${n}` },
+    headers: { 'content-type': 'application/json', 'x-counter-key': opts.key ?? key, 'x-client-ua': opts.ua ?? UA, 'x-client-ip': opts.ip ?? `u${n}` },
     body: JSON.stringify({ h, e: typeof e === 'string' ? e : JSON.stringify(e) })
   });
   const res = await (POST as unknown as (ev: { request: Request }) => Promise<Response>)({ request });
@@ -46,10 +46,11 @@ afterEach(() => {
 
 describe('журнал приёма /c', () => {
   it('принятые события: просмотр с источником и без, время, переход к оплате', async () => {
-    await send('fut-coins.nl', { k: 'view', p: '/', r: 'www.google.com' });
-    await send('fut-coins.nl', { k: 'view', p: '/x/' });
-    await send('fut-coins.nl', { k: 'time', p: '/', d: 12 });
-    await send('fut-coins.nl', { k: 'submit', p: '/', l: 'checkout ps 500000', t: '/kassa/' });
+    const ip = 'v-one';
+    await send('fut-coins.nl', { k: 'view', p: '/', r: 'www.google.com' }, { ip });
+    await send('fut-coins.nl', { k: 'view', p: '/x/' }, { ip });
+    await send('fut-coins.nl', { k: 'time', p: '/', d: 12 }, { ip });
+    await send('fut-coins.nl', { k: 'submit', p: '/', l: 'checkout ps 500000', t: '/kassa/' }, { ip });
     const rows = log()['fut-coins.nl'];
     const got = Object.fromEntries(rows.map((r) => [`${r.kind}:${r.outcome}`, r.n]));
     expect(got).toEqual({ 'view:ok': 1, 'view-nosrc:ok': 1, 'time:ok': 1, 'submit:ok': 1 });
@@ -160,18 +161,53 @@ describe('проверка счётчиков: с последней удачн�
 describe('переход к оплате без просмотра', () => {
   const H = 3600_000;
   it('засчитывается, только если тот же посетитель до этого был на сайте', async () => {
-    const { checkoutHasVisit, markSeen } = await import('../src/lib/server/button-clicks');
-    const started = Date.UTC(2026, 10, 13, 6, 0);
-    const now = started + 5 * H; // панель работает давно
-    expect(checkoutHasVisit('v-test', 'fut-coins.nl', now, started)).toBe(false); // проверка сайта: сразу кнопка
-    markSeen('v-buyer', 'fut-coins.nl', now - 10 * 60_000);
-    expect(checkoutHasVisit('v-buyer', 'fut-coins.nl', now, started)).toBe(true); // смотрел страницу 10 минут назад
-    expect(checkoutHasVisit('v-buyer', 'futcoin.it', now, started)).toBe(false); // на другом сайте не был
-    expect(checkoutHasVisit('v-old', 'fut-coins.nl', now, started)).toBe(false);
-    markSeen('v-old', 'fut-coins.nl', now - 4 * H);
-    expect(checkoutHasVisit('v-old', 'fut-coins.nl', now, started)).toBe(false); // слишком давно
-    // Панель только что перезапущена: о прошлых просмотрах не знает — не отбрасываем.
-    expect(checkoutHasVisit('v-new', 'fut-coins.nl', started + 10 * 60_000, started)).toBe(true);
+    const { checkoutVerdict, markSeen } = await import('../src/lib/server/button-clicks');
+    const now = Date.UTC(2026, 10, 13, 12, 0);
+    expect(checkoutVerdict(testDb, 'v-test', 'fut-coins.nl', now)).toBe('no-visit'); // проверка сайта: сразу кнопка
+    markSeen(testDb, 'v-buyer', 'fut-coins.nl', now - 10 * 60_000);
+    expect(checkoutVerdict(testDb, 'v-buyer', 'fut-coins.nl', now)).toBe('ok'); // смотрел страницу 10 минут назад
+    expect(checkoutVerdict(testDb, 'v-buyer', 'futcoin.it', now)).toBe('no-visit'); // на другом сайте не был
+    markSeen(testDb, 'v-old', 'fut-coins.nl', now - 4 * H);
+    expect(checkoutVerdict(testDb, 'v-old', 'fut-coins.nl', now)).toBe('no-visit'); // слишком давно
+  });
+
+  it('один посетитель — один переход за 30 минут, окно продлевается нажатиями', async () => {
+    const { checkoutVerdict, markSeen } = await import('../src/lib/server/button-clicks');
+    const M = 60_000;
+    const t0 = Date.UTC(2026, 10, 13, 12, 0);
+    markSeen(testDb, 'v-tester', 'fccoinsprice.com', t0);
+    // Проверка кнопок: сотни нажатий подряд — один переход.
+    const got = Array.from({ length: 200 }, (_, i) => checkoutVerdict(testDb, 'v-tester', 'fccoinsprice.com', t0 + i * 3000));
+    expect(got.filter((v) => v === 'ok')).toHaveLength(1);
+    expect(got.filter((v) => v === 'repeat')).toHaveLength(199);
+    // Человек выбрал пакет, вернулся и через 40 минут снова пошёл к оплате — второй переход.
+    markSeen(testDb, 'v-buyer', 'fccoinsprice.com', t0);
+    expect(checkoutVerdict(testDb, 'v-buyer', 'fccoinsprice.com', t0 + M)).toBe('ok');
+    expect(checkoutVerdict(testDb, 'v-buyer', 'fccoinsprice.com', t0 + 5 * M)).toBe('repeat');
+    markSeen(testDb, 'v-buyer', 'fccoinsprice.com', t0 + 44 * M);
+    expect(checkoutVerdict(testDb, 'v-buyer', 'fccoinsprice.com', t0 + 45 * M)).toBe('ok');
+  });
+
+  it('связки переживают перезапуск панели (лежат в базе)', async () => {
+    const { checkoutVerdict, markSeen } = await import('../src/lib/server/button-clicks');
+    const now = Date.now();
+    markSeen(testDb, 'v-keep', 'fut-coins.nl', now - 60_000);
+    testDb.close();
+    testDb = openDb(join(dir, 't.db'));
+    expect(checkoutVerdict(testDb, 'v-keep', 'fut-coins.nl', now)).toBe('ok');
+    expect(checkoutVerdict(testDb, 'v-stranger', 'fut-coins.nl', now)).toBe('no-visit');
+  });
+
+  it('через /c: повтор в журнале как «repeat», в статистику идёт один переход', async () => {
+    const ip = 'v-c';
+    await send('fut-coins.nl', { k: 'view', p: '/', r: '' }, { ip });
+    for (let i = 0; i < 5; i++) await send('fut-coins.nl', { k: 'submit', p: '/', l: `checkout ps ${100000 * (i + 1)}`, t: '/kassa/' }, { ip });
+    await send('fut-coins.nl', { k: 'submit', p: '/', l: 'checkout ps 100000', t: '/kassa/' }, { ip: 'v-nobody' });
+    const got = Object.fromEntries(log()['fut-coins.nl'].map((r) => [`${r.kind}:${r.outcome}`, r.n]));
+    expect(got['submit:ok']).toBe(1);
+    expect(got['submit:repeat']).toBe(4);
+    expect(got['submit:no-visit']).toBe(1);
+    expect(clicksForRange(testDb, day(), day()).filter((r) => r.kind === 'submit').reduce((a, r) => a + r.n, 0)).toBe(1);
   });
 
   it('по одному-двум просмотрам отсутствие времени — не поломка', () => {

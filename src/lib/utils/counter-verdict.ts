@@ -58,7 +58,7 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
     return [{ level: 'bad', text: `Проверка связи дошла, но отброшена: ключ сайта не подходит (${fmtTime(last(tests, () => true))}). Обновите секрет COUNTER_KEY в Cloudflare.` }];
   }
   if (!out.length) {
-    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.${rejected('no-visit') ? ` Не засчитано ${rejected('no-visit')} переходов к оплате без просмотра сайта (проверки сайта, роботы).` : ''}` });
+    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.${rejected('no-visit') ? ` Не засчитано ${rejected('no-visit')} переходов к оплате без просмотра сайта (проверки сайта, роботы).` : ''}${rejected('repeat') ? ` Не засчитано ${rejected('repeat')} повторных переходов к оплате одного посетителя за 30 минут.` : ''}` });
   }
   return out;
 }

@@ -7,7 +7,7 @@ import type { Db } from './db';
 import { DISPLAY_TIME_ZONE, localToday } from './gsc-calendar';
 import type { CounterLogRow } from '$lib/utils/counter-verdict';
 
-export type CounterOutcome = 'ok' | 'bad-key' | 'unknown-site' | 'bot' | 'limit' | 'bad-event' | 'no-visit';
+export type CounterOutcome = 'ok' | 'bad-key' | 'unknown-site' | 'bot' | 'limit' | 'bad-event' | 'no-visit' | 'repeat';
 
 /** Вид события в журнале: просмотр с источником и без, время, переход к оплате, нажатие. */
 export function logKind(kind: string, target = ''): string {
