@@ -168,11 +168,12 @@
   const checks = $derived.by(() =>
     data.hosts
       .map((h: string) => {
-        const rows = data.counterLog[h] ?? [];
+        const rows = data.counterLog[h]?.rows ?? [];
+        const since = data.counterLog[h]?.since ?? null;
         // Журнал ведётся с обновления панели: пусто, но события раньше были — не «сломано».
         const f: Finding[] = !rows.length && data.lastSeen[h]
           ? [{ level: 'wait', text: `С начала журнала (${data.counterLogStart ? fmtDay(data.counterLogStart) : 'сегодня'}) на сайт ещё никто не заходил — ждём посетителей. Раньше события были (последнее ${fmtDay(data.lastSeen[h])}). Связь можно проверить кнопкой «Проверить сайт» ниже.` }]
-          : counterVerdict(rows, fmtTs);
+          : counterVerdict(rows, fmtTs, since);
         return { h, f, rank: Math.min(...f.map((x) => LEVEL_RANK[x.level])) };
       })
       .sort((a: { rank: number; h: string }, b: { rank: number; h: string }) => a.rank - b.rank || a.h.localeCompare(b.h))
@@ -321,12 +322,14 @@
       <details class="border-b border-line" open={checksBad > 0}>
         <summary class="cursor-pointer select-none px-3 py-2 text-xs hover:bg-sunk">
           <span class="font-semibold text-ink">Проверка счётчиков</span>
-          <span class="text-ink-3">· за 7 дней · работает {checks.length - checksBad - checksWait} из {checks.length}{checksWait ? ` · ждём посетителей ${checksWait}` : ''}</span>
+          <span class="text-ink-3">· с последней проверки связи (иначе за 7 дней) · работает {checks.length - checksBad - checksWait} из {checks.length}{checksWait ? ` · ждём посетителей ${checksWait}` : ''}</span>
           {#if checksBad}<span class="badge badge-warn ml-1">проблемы у {checksBad}</span>{/if}
         </summary>
         <div class="px-3 pb-3">
           <p class="mb-2 text-xs text-ink-3">
-            Что панель получила от счётчика каждого сайта и что отбросила — с причиной. Журнал ведётся с {data.counterLogStart ? fmtDay(data.counterLogStart) : 'этого обновления панели'}:
+            Что панель получила от счётчика каждого сайта и что отбросила — с причиной. Если связь с сайтом проверялась
+            («Проверить сайт» или проверка после выкладки), считаются только события после последней удачной проверки:
+            ошибки до неё уже исправлены. Журнал ведётся с {data.counterLogStart ? fmtDay(data.counterLogStart) : 'этого обновления панели'}:
             сайты, на которые с тех пор никто не заходил, появятся здесь с первыми посетителями.
           </p>
           <table class="app-table rounded border border-line bg-pane">
@@ -449,7 +452,7 @@
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(s.host) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
                     {s.host}
                     <a class="inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href="https://{s.host}/" target="_blank" rel="noopener noreferrer" title="Перейти на сайт (в новой вкладке)" aria-label="Перейти на сайт {s.host}" onclick={(e) => e.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
-                    {#if !data.lastSeen[s.host]}<span class="badge badge-muted ml-1 whitespace-nowrap font-normal" title={(checkOf(s.host)?.f ?? []).map((f: Finding) => f.text).join(' ') || 'От сайта ещё не записано ни одного события'}>{(data.counterLog[s.host] ?? []).length ? 'события отброшены' : 'нет событий'}</span>{/if}
+                    {#if !data.lastSeen[s.host]}<span class="badge badge-muted ml-1 whitespace-nowrap font-normal" title={(checkOf(s.host)?.f ?? []).map((f: Finding) => f.text).join(' ') || 'От сайта ещё не записано ни одного события'}>{(data.counterLog[s.host]?.rows ?? []).length ? 'события отброшены' : 'нет событий'}</span>{/if}
                     {#if data.noConsole.includes(s.host)}<span class="badge badge-warn ml-1 whitespace-nowrap font-normal" title="Счётчик работает. Показов и кликов Google нет: консоль этого сайта отключена или Google не ответил — см. плашку вверху и страницу Accounts">нет консоли Google</span>{/if}
                   </span>
                 </td>

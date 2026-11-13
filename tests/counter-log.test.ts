@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { openDb, type Db } from '../src/lib/server/db';
 import { ensureCounterKey } from '../src/lib/server/config';
 import { clicksForRange } from '../src/lib/server/button-clicks';
-import { counterLogSince } from '../src/lib/server/counter-log';
+import { counterChecks, counterLogSince, logBucket, logCounter } from '../src/lib/server/counter-log';
 import { counterVerdict } from '../src/lib/utils/counter-verdict';
 
 let testDb: Db;
@@ -112,5 +112,47 @@ describe('вывод по сайту', () => {
       { kind: 'click', outcome: 'limit', n: 1, lastAt: 1 }
     ], t);
     expect(v).toEqual([{ level: 'ok', text: 'Принято 18 событий (последнее 3): просмотры с источником, время, переходы к оплате.' }]);
+  });
+});
+
+describe('проверка счётчиков: с последней удачной проверки связи', () => {
+  const H = 3600_000;
+  const t0 = Date.UTC(2026, 10, 13, 0, 20); // 01:20 по Берлину: старый счётчик, ключ не подошёл
+  const t1 = t0 + 9 * H; // 10:20: сайт переведён, проверка связи прошла
+  const t2 = t1 + 2 * H; // 12:20: посетитель
+
+  it('ячейка журнала — день и час по Берлину', () => {
+    expect(logBucket(t0)).toBe('2026-11-13 01');
+    expect(logBucket(t1)).toBe('2026-11-13 10');
+  });
+
+  it('ошибки до проверки связи не в счёт, события после — в счёт', () => {
+    logCounter(testDb, 'futcoin.it', 'view', 'bad-key', t0);
+    logCounter(testDb, 'futcoin.it', 'view-nosrc', 'ok', t0);
+    logCounter(testDb, 'futcoin.it', 'test', 'ok', t1);
+    logCounter(testDb, 'futcoin.it', 'view', 'ok', t2);
+    logCounter(testDb, 'futcoin.it', 'time', 'ok', t2);
+    const c = counterChecks(testDb, '2026-11-07')['futcoin.it'];
+    expect(c.since).toBe(t1);
+    expect(Object.fromEntries(c.rows.map((r) => [`${r.kind}:${r.outcome}`, r.n]))).toEqual({ 'test:ok': 1, 'view:ok': 1, 'time:ok': 1 });
+    const f = counterVerdict(c.rows, (ts) => String(ts), c.since);
+    expect(f).toHaveLength(1);
+    expect(f[0].level).toBe('ok');
+    expect(f[0].text).toContain(`после проверки связи ${t1}`);
+  });
+
+  it('после проверки посетителей не было — связь есть, ошибок нет', () => {
+    logCounter(testDb, 'fut-coins.nl', 'view', 'bad-key', t0);
+    logCounter(testDb, 'fut-coins.nl', 'test', 'ok', t1);
+    const c = counterChecks(testDb, '2026-11-07')['fut-coins.nl'];
+    const f = counterVerdict(c.rows, (ts) => String(ts), c.since);
+    expect(f).toEqual([expect.objectContaining({ level: 'ok', text: expect.stringContaining('Посетителей с тех пор не было') })]);
+  });
+
+  it('без проверки связи — весь период, ошибки видны', () => {
+    logCounter(testDb, 'other.de', 'view', 'bad-key', t0);
+    const c = counterChecks(testDb, '2026-11-07')['other.de'];
+    expect(c.since).toBeNull();
+    expect(counterVerdict(c.rows, (ts) => String(ts), c.since)[0].level).toBe('bad');
   });
 });

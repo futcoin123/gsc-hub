@@ -20,7 +20,9 @@ const sum = (rows: CounterLogRow[], f: (r: CounterLogRow) => boolean) => rows.fi
 const last = (rows: CounterLogRow[], f: (r: CounterLogRow) => boolean) => rows.filter(f).reduce((a, r) => Math.max(a, r.lastAt), 0);
 
 /** Находки по сайту за период журнала: сначала проблемы, «всё в порядке» — только если проблем нет. */
-export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => string = (ts) => new Date(ts).toISOString()): Finding[] {
+/** since — последняя успешная проверка связи: строки журнала уже только после неё
+ *  (counterChecks), ошибки до перевода сайта на новый счётчик не в счёт. */
+export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => string = (ts) => new Date(ts).toISOString(), since: number | null = null): Finding[] {
   if (!rows.length) {
     return [{ level: 'bad', text: 'От сайта не пришло ни одного события. Счётчик на сайте ничего не отправляет в панель (или сайт никто не открывал).' }];
   }
@@ -51,7 +53,7 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
     return [{ level: 'bad', text: `Проверка связи дошла, но отброшена: ключ сайта не подходит (${fmtTime(last(tests, () => true))}). Обновите секрет COUNTER_KEY в Cloudflare.` }];
   }
   if (!out.length) {
-    out.push({ level: 'ok', text: `Принято ${accepted} событий (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.` });
+    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.` });
   }
   return out;
 }

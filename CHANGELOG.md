@@ -44,6 +44,14 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **“Counter check” starts at the last successful link check.** The verdict
+  used to cover all seven days, so after the sites moved to the unified counter
+  the table would have shown the old counters' errors for a week (key does not
+  match, site not in a console, views without a source). Now, once the link to
+  a site was checked (“Check site” or the post-deploy check) and the key
+  matched, only events after that check count; no visitors since —
+  “Link to the panel works, no visitors since”. The intake log is now written
+  per hour instead of per day (old rows stay daily).
 - **Unified counter v2: the link check result is visible from outside.** On
   `{"gsc_ping":1}` the site waits for the panel and answers with an
   `x-counter-ping` header: `ok`, `bad-key` (the site key is wrong), `no-key`
