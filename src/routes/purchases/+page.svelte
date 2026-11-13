@@ -1,8 +1,8 @@
 <script lang="ts">
   // «Закупки»: что изменилось после закупки ссылок — по сайту и по каждому
-  // купленному ключу. До — 7 дней перед датой закупки; после — со следующего
-  // дня по последний полный день Google (до 28 дней).
-  import { onMount } from 'svelte';
+  // купленному ключу. До — 7 дней перед датой закупки; после — период из шапки
+  // (Сегодня, Вчера, 7 дней…), но только дни после закупки.
+  import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { NAKED_LABEL } from '$lib/utils/naked';
 
@@ -11,23 +11,43 @@
   type M = { clicks: number; impressions: number; position: number | null };
   type Item = { id: number; kind: 'anchor' | 'naked'; text: string; variant: 'url' | 'domain' | null; query: string; page: string; qty: number; before: M; after: M | null };
   type Site = { siteUrl: string; links: number; before: M; after: M | null; items: Item[]; error: string | null };
-  type Win = { start: string; end: string; days: number };
-  type Effect = { groupId: number; name: string; date: string; before: Win; after: Win | null; sites: Site[] };
+  type Win = { start: string; end: string; days: number; partial?: boolean };
+  type Per = { key: string; startDate: string; endDate: string; pending: boolean };
+  type Effect = { groupId: number; name: string; date: string; before: Win; after: Win | null; period: Per | null; sites: Site[] };
 
   let open = $state<Set<number>>(new Set());
   let effects = $state<Record<number, { loading: boolean; data: Effect | null; err: string | null }>>({});
 
+  // Ответ, пришедший после смены периода в шапке, — уже не про этот период.
+  let gen = 0;
   async function load(id: number) {
     if (effects[id]?.data || effects[id]?.loading) return;
+    const my = gen;
     effects[id] = { loading: true, data: null, err: null };
     try {
       const r = await fetch(`/purchases/effect?g=${id}`);
       if (!r.ok) throw new Error((await r.text()).slice(0, 200) || `HTTP ${r.status}`);
-      effects[id] = { loading: false, data: await r.json(), err: null };
+      const d = await r.json();
+      if (my === gen) effects[id] = { loading: false, data: d, err: null };
     } catch (e) {
-      effects[id] = { loading: false, data: null, err: (e as Error).message };
+      if (my === gen) effects[id] = { loading: false, data: null, err: (e as Error).message };
     }
   }
+  // Период в шапке сменили — «после» пересчитать для всех открытых закупок.
+  const periodSig = $derived(data.period ? `${data.period.key}|${data.period.startDate}|${data.period.endDate}` : '');
+  let seenSig = '';
+  $effect(() => {
+    const sig = periodSig;
+    untrack(() => {
+      if (seenSig && sig !== seenSig) {
+        gen++;
+        effects = {};
+        for (const id of open) load(id);
+      }
+      seenSig = sig;
+    });
+  });
+  const PERIOD_LABEL: Record<string, string> = { today: 'Сегодня', yesterday: 'Вчера', '7': '7 дней', '28': '28 дней', '90': '3 месяца', '180': '6 месяцев', '480': '16 месяцев' };
   function toggle(id: number) {
     const n = new Set(open);
     if (n.has(id)) n.delete(id);
@@ -44,6 +64,7 @@
   });
 
   const fd = (iso: string) => iso.split('-').reverse().join('.');
+  const perLabel = (p: Per) => PERIOD_LABEL[p.key] ?? `${fd(p.startDate)} – ${fd(p.endDate)}`;
   const fmt = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
   const perDay = (n: number, days: number) => (days ? n / days : 0);
   const pos = (p: number | null) => (p === null ? '—' : p.toFixed(1));
@@ -78,7 +99,7 @@
       <h1 class="text-base font-semibold">Закупки ссылок — что изменилось после</h1>
       <p class="mt-1 text-xs text-ink-2">
         По каждой закупке из «Групп»: сайт целиком и каждая купленная ссылка — анкор считается на той странице, куда ведёт ссылка (не по всему сайту: один анкор бывает на страницах разных стран), безанкорная — вся страница.
-        <b>До</b> — 7 дней перед датой закупки, <b>после</b> — со следующего дня по последний полный день Google (до 28 дней).
+        <b>До</b> — 7 дней перед датой закупки, <b>после</b> — за период в шапке (Сегодня, Вчера, 7 дней…), но только дни после закупки: «Сегодня» — текущие сутки Google (цифры неполные), «Вчера» — один вчерашний день, «7 дней» — дни после закупки из последних семи полных.
         Показы и клики — в среднем за день, позиция — средняя (▲ — поднялся). Дата закупки — когда группу зафиксировали, иначе дата в её названии.
         Эти же закупки отмечены фиолетовой линией на графиках Dashboard, страницы сайта и «Ключей сайтов».
       </p>
@@ -110,7 +131,10 @@
                 {@const e = ef.data}
                 <p class="mb-2 text-xs text-ink-2">
                   До: {fd(e.before.start)} – {fd(e.before.end)} ({e.before.days} дн.) ·
-                  {#if e.after}после: {fd(e.after.start)} – {fd(e.after.end)} ({e.after.days} дн.){:else}<b class="text-warn">после — ещё рано:</b> Google пока не отдал ни одного полного дня после {fd(e.date)}; цифры появятся завтра{/if}
+                  {#if e.after}после: {e.after.days === 1 ? fd(e.after.start) : `${fd(e.after.start)} – ${fd(e.after.end)}`} ({e.after.days} дн.){#if e.period} · период в шапке «{perLabel(e.period)}»{#if e.after.start > e.period.startDate}, с первого дня после закупки{/if}{/if}{#if e.after.partial} · <b class="text-warn">{fd(e.after.end)} Google ещё дописывает</b> — цифры за этот день неполные{/if}
+                  {:else if e.period?.pending}<b class="text-warn">после — ещё рано:</b> Google ещё не начал этот день (его сутки идут по времени Калифорнии); выберите «Вчера» или «7 дней»
+                  {:else if e.period && e.period.endDate <= e.date}<b class="text-warn">после — нет дней:</b> период «{perLabel(e.period)}» заканчивается {fd(e.period.endDate)}, а закупка {fd(e.date)}; выберите период позже
+                  {:else}<b class="text-warn">после — ещё рано:</b> Google пока не отдал ни одного полного дня после {fd(e.date)}; цифры появятся завтра{/if}
                 </p>
                 <div class="overflow-x-auto rounded border border-line">
                   <table class="app-table is-roomy">

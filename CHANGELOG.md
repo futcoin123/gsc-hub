@@ -44,6 +44,14 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Purchases: "after" follows the header period.** The report used to ignore
+  the period switch and always averaged from the day after the purchase to the
+  last complete Google day, so Today, Yesterday and 7 days showed the same
+  numbers. "After" is now the selected period, limited to days after the
+  purchase and to Google's current day: Today is Google's current day (marked
+  as incomplete), Yesterday one day, 7 days the post-purchase days among the
+  last seven complete ones. "Before" stays the 7 days before the purchase.
+  Changing the period recomputes the open purchases at once.
 - **A checkout counts only after a page view.** Site checks and robots often
   press the pay button straight away, without a view being sent, and such
   “checkouts” landed in “Went to checkout” (on 13.11 — about ten per site with

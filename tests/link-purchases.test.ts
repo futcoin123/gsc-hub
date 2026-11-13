@@ -99,6 +99,23 @@ describe('до и после закупки', () => {
     expect(windows('2026-11-11', now).after).toBeNull(); // ещё рано
     expect(windows('2026-09-01', now).after).toEqual({ start: '2026-09-02', end: '2026-09-29', days: 28 });
   });
+  it('окно «после» берёт период из шапки: только дни после закупки и не дальше суток Google', () => {
+    const now = Date.parse('2026-11-13T13:00:00Z'); // сутки Google — 13.11, последний полный — 12.11
+    const per = (key: string, startDate: string, endDate: string) => ({ key, startDate, endDate });
+    // Закупка 10.11: «Сегодня», «Вчера» и «7 дней» — три разных окна.
+    expect(windows('2026-11-10', now, per('today', '2026-11-13', '2026-11-13')).after).toEqual({ start: '2026-11-13', end: '2026-11-13', days: 1, partial: true });
+    expect(windows('2026-11-10', now, per('yesterday', '2026-11-12', '2026-11-12')).after).toEqual({ start: '2026-11-12', end: '2026-11-12', days: 1 });
+    expect(windows('2026-11-10', now, per('7', '2026-11-06', '2026-11-12')).after).toEqual({ start: '2026-11-11', end: '2026-11-12', days: 2 });
+    // «До» от периода не зависит.
+    expect(windows('2026-11-10', now, per('today', '2026-11-13', '2026-11-13')).before).toEqual({ start: '2026-11-03', end: '2026-11-09', days: 7 });
+    // В периоде нет дней после закупки.
+    expect(windows('2026-11-12', now, per('yesterday', '2026-11-12', '2026-11-12')).after).toBeNull();
+    // Сегодня по Берлину, а Google свои сутки ещё не начал (07:00 по Берлину = 22:00 в Калифорнии).
+    const early = Date.parse('2026-11-13T06:00:00Z');
+    expect(windows('2026-11-10', early, per('today', '2026-11-13', '2026-11-13')).after).toBeNull();
+    // Длинный период — без потолка в 28 дней, но с первого дня после закупки.
+    expect(windows('2026-09-01', now, per('90', '2026-08-15', '2026-11-12')).after).toEqual({ start: '2026-09-02', end: '2026-11-12', days: 72 });
+  });
   it('сумма окна: позиция — средняя по показам', () => {
     const rows = [
       { date: '2026-11-03', clicks: 1, impressions: 10, position: 20 },

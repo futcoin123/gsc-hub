@@ -1,13 +1,15 @@
 // Отчёт «Закупки»: что изменилось после закупки ссылок — по сайту и по каждому
 // купленному ключу (анкору) или странице (безанкорные).
 //   До    — 7 дней перед датой закупки.
-//   После — со следующего дня по последний полный день Google (не больше 28 дней).
+//   После — период из шапки (Сегодня, Вчера, 7 дней, свои даты…), но не раньше
+//           следующего дня после закупки и не позже текущих суток Google.
+//           Без периода — со следующего дня по последний полный день (до 28 дней).
 // Клики и показы — суммы за окно (на странице делятся на дни), позиция — средняя,
 // взвешенная по показам, как в Search Console.
 import type { Db } from './db';
 import { getAccount } from './accounts';
 import { listAllKnownSites, searchAnalyticsQuery, type SearchAnalyticsRow } from './google';
-import { addCalendarDays, dateSpan, latestCompleteDay } from './gsc-calendar';
+import { addCalendarDays, dateSpan, gscToday, latestCompleteDay } from './gsc-calendar';
 import type { GroupPurchase } from './link-purchases';
 import { nakedAnchor, nakedVariant } from '$lib/utils/naked';
 
@@ -18,6 +20,15 @@ export interface Window {
   start: string;
   end: string;
   days: number;
+  /** В окно входят сутки, которые Google ещё дописывает: цифры неполные. */
+  partial?: boolean;
+}
+/** Период из шапки — только то, что нужно окну «после». */
+export interface AfterPeriod {
+  key: string;
+  startDate: string;
+  endDate: string;
+  pending?: boolean;
 }
 export interface Metrics {
   clicks: number;
@@ -50,16 +61,26 @@ export interface PurchaseEffect {
   date: string;
   before: Window;
   after: Window | null;
+  /** Период из шапки, по которому взято «после» (null — старое правило, до 28 дней). */
+  period: AfterPeriod | null;
   sites: SiteEffect[];
 }
 
-export function windows(date: string, now = Date.now()): { before: Window; after: Window | null } {
+export function windows(date: string, now = Date.now(), period: AfterPeriod | null = null): { before: Window; after: Window | null } {
   const before = { start: addCalendarDays(date, -BEFORE_DAYS), end: addCalendarDays(date, -1), days: BEFORE_DAYS };
+  const first = addCalendarDays(date, 1);
+  if (period) {
+    // «После» = выбранный период, обрезанный датой закупки и текущими сутками Google.
+    const today = gscToday(now);
+    const start = period.startDate > first ? period.startDate : first;
+    const end = period.endDate < today ? period.endDate : today;
+    if (end < start) return { before, after: null };
+    return { before, after: { start, end, days: dateSpan(start, end), ...(end >= today ? { partial: true } : {}) } };
+  }
   const last = latestCompleteDay(now);
-  const start = addCalendarDays(date, 1);
   const cap = addCalendarDays(date, AFTER_MAX_DAYS);
   const end = last < cap ? last : cap;
-  return { before, after: end >= start ? { start, end, days: dateSpan(start, end) } : null };
+  return { before, after: end >= first ? { start: first, end, days: dateSpan(first, end) } : null };
 }
 
 /** Сложить строки по дням в одно окно: клики и показы — сумма, позиция — взвешенная. */
@@ -81,8 +102,8 @@ export const normPage = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '').
 /** Страницы для фильтра Google: с косой чертой в конце и без, с # после. */
 const pageRe = (pages: string[]) => `^(?:${[...new Set(pages.map((p) => reEscape(p.replace(/#.*$/, '').replace(/\/$/, ''))))].join('|')})/?(?:#.*)?$`;
 
-export async function purchaseEffect(db: Db, p: GroupPurchase, now = Date.now()): Promise<PurchaseEffect> {
-  const { before, after } = windows(p.date, now);
+export async function purchaseEffect(db: Db, p: GroupPurchase, now = Date.now(), period: AfterPeriod | null = null): Promise<PurchaseEffect> {
+  const { before, after } = windows(p.date, now, period);
   const span = { startDate: before.start, endDate: after?.end ?? before.end };
   const known = await listAllKnownSites(db);
   const accOf = new Map(known.sites.map((s) => [s.siteUrl, s.accountId]));
@@ -156,5 +177,6 @@ export async function purchaseEffect(db: Db, p: GroupPurchase, now = Date.now())
       }
     })
   );
-  return { groupId: p.groupId, name: p.name, date: p.date, before, after, sites };
+  const per = period ? { key: period.key, startDate: period.startDate, endDate: period.endDate, pending: !!period.pending } : null;
+  return { groupId: p.groupId, name: p.name, date: p.date, before, after, period: per, sites };
 }
