@@ -44,6 +44,9 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Counter check on Buttons is always collapsed.** It used to open by itself
+  when a site had problems; now only the "проблемы у N" badge in its title
+  says so, and it opens on click.
 - **Sticky column headers in every table.** When a long list scrolls, the
   column header row stays under the panel header on every page, not only on
   Buttons. Tables inside horizontal-scroll frames (Purchases, Keywords,

@@ -318,8 +318,9 @@
     {/if}
 
     {#if checks.length}
-      <!-- Проверка счётчиков: что панель получила от каждого сайта и что отбросила, с причиной. -->
-      <details class="border-b border-line" open={checksBad > 0}>
+      <!-- Проверка счётчиков: что панель получила от каждого сайта и что отбросила, с причиной.
+           Всегда свёрнута (просьба владелицы 13.11.2026): о проблемах говорит значок в заголовке. -->
+      <details class="border-b border-line">
         <summary class="cursor-pointer select-none px-3 py-2 text-xs hover:bg-sunk">
           <span class="font-semibold text-ink">Проверка счётчиков</span>
           <span class="text-ink-3">· с последней проверки связи (иначе за 7 дней) · работает {checks.length - checksBad - checksWait} из {checks.length}{checksWait ? ` · ждём посетителей ${checksWait}` : ''}</span>
