@@ -139,6 +139,15 @@ describe('зашифрованная карта в хабе', () => {
     expect(importKeyMap(db, next)).toBe(0);
   });
 
+  it('ключи темы берутся из каждой новой карты целиком', async () => {
+    const { keyMapTopics } = await import('../src/lib/server/key-map');
+    const { publicKey } = keyMapPublicInfo(db);
+    importKeyMap(db, encryptKeyMap({ mapUpdated: '2026-11-09', hosts: { 'futcoin.it': [page('crediti fc 27')] }, topics: { IT: ['crediti fc 27', 'futcoin'] } }, publicKey));
+    expect(keyMapTopics(db)).toEqual({ IT: ['crediti fc 27', 'futcoin'] });
+    importKeyMap(db, encryptKeyMap({ mapUpdated: '2026-11-13', hosts: { 'futcoin.it': [page('crediti fc 27')] }, topics: { IT: ['fc 27 coins'], ES: ['monedas fc 27'] } }, publicKey));
+    expect(keyMapTopics(db)).toEqual({ IT: ['fc 27 coins'], ES: ['monedas fc 27'] });
+  });
+
   it('карта под чужим ключом или пустая — не берётся', () => {
     const other = openDb(join(dir, 'other.db'));
     const enc = encryptKeyMap({ mapUpdated: null, hosts: { 'fut-coin.de': [page('x')] } }, keyMapPublicInfo(other).publicKey);
@@ -147,5 +156,14 @@ describe('зашифрованная карта в хабе', () => {
     expect(importKeyMap(db, enc)).toBeNull();
     expect(importKeyMap(db, { v: 0 })).toBeNull();
     expect(keyMapAll(db).size).toBe(0);
+  });
+});
+
+describe('ключи темы по странам (для «Ключей гео» в ТЗ)', () => {
+  it('коммерческие группы о монетах, от частых к редким, без прошлых сезонов', async () => {
+    const { buildTopics } = await import('../scripts/key-map.mjs');
+    const g = (h: string, s: number, k = 'com', t = 'Монеты') => ({ h, s, k, t });
+    const data = { countries: [{ id: 'IT', groups: [g('crediti fc 26', 1300), g('crediti fc 27', 1740), g('Futcoin', 590), g('fifa coins 26', 500), g('come fare crediti', 900, 'info', 'Заработать монеты'), g('fc 27 web app', 800, 'com', 'Web App'), g('600k fifa coins', 300, 'com', 'Монеты: сумма'), g('crediti fc 27', 10)] }] };
+    expect(buildTopics(data)).toEqual({ IT: ['crediti fc 27', 'futcoin', '600k fifa coins'] });
   });
 });

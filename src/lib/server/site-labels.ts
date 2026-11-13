@@ -4,7 +4,7 @@
 import type { Db } from './db';
 import { listAllKnownSites } from './google';
 import { labelKey } from '$lib/utils/site-label';
-import { keyMapAll } from './key-map';
+import { keyMapAll, keyMapTopics } from './key-map';
 import { geoKeywords } from '$lib/utils/key-map';
 
 /** Метка всех сайтов, которые были в панели на 13.11.2026. */
@@ -73,12 +73,13 @@ export async function seedSiteLabels(db: Db, now = Date.now()): Promise<void> {
 }
 
 /**
- * Ключи под страну для ТЗ группы: метка → страна → ключи. Для «futcoin» — из
- * «Карты ключей FUT»; у других проектов (WoW…) своего источника пока нет.
+ * Ключи под страну для ТЗ группы: метка → страна → ключи (до 15, в ТЗ идут
+ * 5–10 на блок). Для «futcoin» — ключи темы и ключи сайтов из «Карты ключей
+ * FUT»; у других проектов (WoW…) своего источника пока нет.
  */
 export function labelGeoKeys(db: Db): Record<string, Record<string, string[]>> {
   try {
-    return { [FIRST_LABEL]: geoKeywords(keyMapAll(db)) };
+    return { [FIRST_LABEL]: geoKeywords(keyMapAll(db), keyMapTopics(db)) };
   } catch {
     return {};
   }

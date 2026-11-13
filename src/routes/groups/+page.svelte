@@ -15,6 +15,8 @@
   import SiteLabel from '$lib/components/SiteLabel.svelte';
   import { useLabels, labelOf, sl } from '$lib/site-labels.svelte';
   import { blockCompare } from '$lib/utils/site-label';
+  import { geoKeyCount } from '$lib/utils/key-map';
+  import { onMount } from 'svelte';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
   $effect.pre(() => useLabels(data.labels));
@@ -223,6 +225,58 @@
       out.get(gId)!.geoQty += it.qty;
     }
     return out;
+  });
+
+  // «Ключи гео» — последняя колонка, столбиком по строкам блока страны: 5–10
+  // ключей (просьба владелицы 13.11.2026); строк меньше — ниже строки только с
+  // ключом. Те же ключи и тот же порядок, что в CSV.
+  const tzKeys = $derived.by(() => {
+    const byId = new Map<number, string>();
+    const extra = new Map<number, string[]>();
+    if (tzSort) return { byId, extra };
+    for (let start = 0; start < tzItems.length; ) {
+      const first = tzItems[start];
+      let end = start + 1;
+      while (end < tzItems.length && labelOf(tzItems[end].siteUrl) === labelOf(first.siteUrl) && geoOf(tzItems[end]) === geoOf(first)) end++;
+      const geo = geoOf(first);
+      const pool = geo ? (data.geoKeys[labelOf(first.siteUrl) ?? '']?.[geo] ?? []) : [];
+      const keys = pool.slice(0, geoKeyCount(end - start, pool.length));
+      for (let n = start; n < end; n++) if (keys[n - start]) byId.set(tzItems[n].id, keys[n - start]);
+      if (keys.length > end - start) extra.set(tzItems[end - 1].id, keys.slice(end - start));
+      start = end;
+    }
+    return { byId, extra };
+  });
+  const tzCols = $derived(group && !group.fixedAt ? 14 : 13);
+
+  // Какой блок (метка · страна) сейчас под липкой шапкой ТЗ — пишем в шапку,
+  // чтобы при прокрутке длинного блока было видно, где ты.
+  let tzTable = $state<HTMLTableElement | null>(null);
+  let tzNow = $state('');
+  function findNow() {
+    const t = tzTable;
+    if (!t || !t.tHead) return;
+    const line = t.tHead.getBoundingClientRect().bottom + 1;
+    let cur = '';
+    for (const r of t.querySelectorAll<HTMLTableRowElement>('tbody tr.tz-geo')) {
+      if (!cur || r.getBoundingClientRect().top < line) cur = r.dataset.block ?? cur;
+      else break;
+    }
+    if (cur !== tzNow) tzNow = cur;
+  }
+  onMount(() => {
+    const on = () => requestAnimationFrame(findNow);
+    window.addEventListener('scroll', on, { passive: true });
+    window.addEventListener('resize', on);
+    return () => {
+      window.removeEventListener('scroll', on);
+      window.removeEventListener('resize', on);
+    };
+  });
+  $effect(() => {
+    void tzItems;
+    void tzLocale;
+    requestAnimationFrame(findNow);
   });
 
   // Галочки в ТЗ: отметить строки и убрать их разом.
@@ -645,17 +699,17 @@
             <p class="text-xs text-ink-3">Пока нет. Откройте сайт из списка выше и в Striking Distance нажимайте <b>+</b> у нужных ключей.</p>
           {:else}
             <div class="overflow-x-auto rounded border border-line">
-              <table class="app-table">
-                <thead><tr>{#if !group.fixedAt}<th class="w-8"><input type="checkbox" checked={tzAllPicked} aria-label="Отметить все строки ТЗ" onchange={() => (tzPicked = tzAllPicked ? new Set() : new Set(data.items.map((i) => i.id)))} /></th>{/if}<th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('site')}>Сайт<SortCaret dir={tzSort === 'site' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('kind')}>Тип<SortCaret dir={tzSort === 'kind' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('page')}>Страница<SortCaret dir={tzSort === 'page' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('query')}>Анкор<SortCaret dir={tzSort === 'query' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('qty')}>Ссылок<SortCaret dir={tzSort === 'qty' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('position')}>Pos<SortCaret dir={tzSort === 'position' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('impressions')}>Impr<SortCaret dir={tzSort === 'impressions' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('clicks')}>Clicks<SortCaret dir={tzSort === 'clicks' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th title="Сколько ссылок на этот ключ взято для других ваших сайтов; ⚠ — другой сайт стоит выше">Другие сайты</th><th title="Язык страницы — как указан на сайте. Названия — как на бирже ссылок">Язык</th><th title="Страна: из «Карты ключей FUT», иначе по зоне домена, иначе Global. Названия — как на бирже ссылок">Гео</th><th></th></tr></thead>
+              <table class="app-table" bind:this={tzTable}>
+                <thead><tr>{#if !group.fixedAt}<th class="w-8"><input type="checkbox" checked={tzAllPicked} aria-label="Отметить все строки ТЗ" onchange={() => (tzPicked = tzAllPicked ? new Set() : new Set(data.items.map((i) => i.id)))} /></th>{/if}<th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('site')}>Сайт<SortCaret dir={tzSort === 'site' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('kind')}>Тип<SortCaret dir={tzSort === 'kind' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('page')}>Страница<SortCaret dir={tzSort === 'page' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('query')}>Анкор<SortCaret dir={tzSort === 'query' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('qty')}>Ссылок<SortCaret dir={tzSort === 'qty' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('position')}>Pos<SortCaret dir={tzSort === 'position' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('impressions')}>Impr<SortCaret dir={tzSort === 'impressions' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('clicks')}>Clicks<SortCaret dir={tzSort === 'clicks' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th title="Сколько ссылок на этот ключ взято для других ваших сайтов; ⚠ — другой сайт стоит выше">Другие сайты</th><th title="Язык страницы — как указан на сайте. Названия — как на бирже ссылок">Язык</th><th title="Страна: из «Карты ключей FUT», иначе по зоне домена, иначе Global. Названия — как на бирже ссылок">Гео</th><th title="Ключи под страну блока — по одному в строке, 5–10 на страну: ключи темы из «Карты ключей FUT» и ключи сайтов этой страны. В CSV — та же колонка">Ключи гео</th><th></th></tr>{#if !tzSort && tzNow}<tr class="tz-now"><th colspan={tzCols}>{tzNow}</th></tr>{/if}</thead>
                 <tbody>
                   {#each tzItems as it (it.id)}
                     {@const blk = tzBlocks.get(it.id)}
                     {#if blk?.label}
-                      <tr class="tz-label"><td colspan={group.fixedAt ? 12 : 13}>{blk.label} <span class="font-normal text-ink-3">· {blk.labelQty} ссыл.</span></td></tr>
+                      <tr class="tz-label"><td colspan={tzCols}>{blk.label} <span class="font-normal text-ink-3">· {blk.labelQty} ссыл.</span></td></tr>
                     {/if}
                     {#if blk}
-                      {@const gk = data.geoKeys[labelOf(it.siteUrl) ?? '']?.[blk.geo] ?? []}
-                      <tr class="tz-geo"><td colspan={group.fixedAt ? 12 : 13}>{blk.label ?? labelOf(it.siteUrl) ?? 'без метки'} · {blk.geo} <span class="text-ink-3">· {blk.geoQty} ссыл.</span>{#if gk.length}<span class="tz-geo-keys" title="Ключи под эту страну — из «Карты ключей FUT»; уходят в CSV колонкой «Ключи гео»"> · ключи гео: <span class="pii">{gk.join(', ')}</span></span>{/if}</td></tr>
+                      {@const blockName = `${blk.label ?? labelOf(it.siteUrl) ?? 'без метки'} · ${blk.geo}`}
+                      <tr class="tz-geo" data-block={blockName}><td colspan={tzCols}>{blockName} <span class="text-ink-3">· {blk.geoQty} ссыл.</span></td></tr>
                     {/if}
                     <tr class:is-selected={tzPicked.has(it.id)}>
                       {#if !group.fixedAt}<td><input type="checkbox" checked={tzPicked.has(it.id)} aria-label="Отметить строку" onchange={() => tzPick(it.id)} /></td>{/if}
@@ -685,6 +739,7 @@
                       </td>
                       <td class="whitespace-nowrap text-xs text-ink-2">{tzLocale[it.page]?.language ?? (tzLocale[it.page] ? '—' : '…')}</td>
                       <td class="whitespace-nowrap text-xs text-ink-2">{tzLocale[it.page]?.geo ?? '…'}</td>
+                      <td class="tz-key">{tzKeys.byId.get(it.id) ?? ''}</td>
                       <td class="text-right">
                         {#if !group.fixedAt}
                           <form method="POST" action="?/removeItem" use:enhance>
@@ -695,6 +750,9 @@
                         {/if}
                       </td>
                     </tr>
+                    {#each tzKeys.extra.get(it.id) ?? [] as k (k)}
+                      <tr class="tz-extra"><td colspan={tzCols - 2}></td><td class="tz-key">{k}</td><td></td></tr>
+                    {/each}
                   {/each}
                 </tbody>
               </table>
@@ -726,8 +784,22 @@
     background: rgb(var(--sunk));
     white-space: normal;
   }
-  .tz-geo-keys {
-    font-weight: 400;
-    color: rgb(var(--ink-2));
+  .tz-key {
+    min-width: 7rem;
+    font-size: 12px;
+    color: rgb(var(--ink));
+  }
+  .tz-extra > td {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+  /* Строка шапки ТЗ: какой блок (метка · страна) сейчас на экране. */
+  .tz-now > th {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgb(var(--acc-deep));
+    background: rgb(var(--acc-t));
   }
 </style>

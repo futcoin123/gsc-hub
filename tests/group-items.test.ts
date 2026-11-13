@@ -172,11 +172,16 @@ describe('ключи группы (закупка)', () => {
       'https://new-site.com/': { language: 'English', geo: 'Global' }
     };
     const labels = { 'wowgold.co.uk': 'wow', 'fut-coins.nl': 'futcoin', 'futcoin.it': 'futcoin', 'fccoins.es': 'futcoin' };
-    const geoKeys = { futcoin: { Italy: ['crediti fc 27', 'fifa coins'], Spain: ['monedas fc'] } };
+    const it7 = ['crediti fc 27', 'fifa coins', 'fut coins', 'futcoin', 'fc 27 coins', 'crediti fifa 27', 'comprare crediti fc 27'];
+    const geoKeys = { futcoin: { Italy: it7, Spain: ['monedas fc'] } };
     const rows = groupItemsCsv('13-11-26', listGroupItems(db, g), locale, labels, geoKeys).slice(1).trim().split('\r\n').slice(1).map((l) => l.split(';'));
+    // Ключи гео — столбиком: в Италии 2 строки, а ключей минимум 5 — ещё 3 строки только с ключом.
     expect(rows.map((r) => [r[1], r[8], r[5], r[9]])).toEqual([
-      ['futcoin', 'Italy', 'crediti fc 27', 'crediti fc 27, fifa coins'],
-      ['futcoin', 'Italy', 'a', 'crediti fc 27, fifa coins'],
+      ['futcoin', 'Italy', 'crediti fc 27', 'crediti fc 27'],
+      ['futcoin', 'Italy', 'a', 'fifa coins'],
+      ['', '', '', 'fut coins'],
+      ['', '', '', 'futcoin'],
+      ['', '', '', 'fc 27 coins'],
       ['futcoin', 'Netherlands', 'fut coins', ''],
       ['futcoin', 'Spain', 'monedas fc', 'monedas fc'],
       ['wow', 'United Kingdom', 'buy wow gold', ''],

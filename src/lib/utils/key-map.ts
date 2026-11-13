@@ -81,31 +81,39 @@ export function missingKeys(pages: MapPage[], queries: string[]): MapPage[] {
   return pages.filter((p) => ![p.key, ...p.alts].some((k) => qs.has(normKey(k)) || qw.has(wordsOf(k))));
 }
 
-/** Сколько ключей на страну идёт в ТЗ группы. */
-export const GEO_KEYS = 10;
+/** Сколько ключей на страну идёт в ТЗ группы: не меньше 5, не больше 10. */
+export const GEO_KEYS_MIN = 5;
+export const GEO_KEYS_MAX = 10;
+/** Сколько ключей дать блоку страны: по строке на ключ, но 5–10 (просьба владелицы). */
+export const geoKeyCount = (rows: number, available: number) => Math.min(available, Math.max(GEO_KEYS_MIN, Math.min(rows, GEO_KEYS_MAX)));
 
 /**
  * Ключи под страну для ТЗ группы (просьба владелицы 13.11.2026: «на одну гео
- * хотя бы 5–10 ключей, любые, как они там звучат»): из «Карты ключей FUT» —
- * сначала главные ключи сайтов этой страны, потом второстепенные, потом их
- * варианты; без повторов. Страна — названием, как колонка «Гео» (Italy…).
+ * минимум 5 ключей, любые на эту тему, как они там звучат»): сначала ключи
+ * темы страны из «Карты ключей FUT» (коммерческие группы «Монеты», от частых к
+ * редким), потом главные и второстепенные ключи сайтов этой страны; без
+ * повторов. Страна — названием, как колонка «Гео» (Italy…).
  */
-export function geoKeywords(map: Map<string, MapPage[]>, n = GEO_KEYS): Record<string, string[]> {
-  const pools = new Map<string, { main: string[]; secondary: string[]; alts: string[] }>();
+export function geoKeywords(map: Map<string, MapPage[]>, topics: Record<string, string[]> = {}, n = 15): Record<string, string[]> {
+  const pools = new Map<string, string[]>();
+  const pool = (geo: string) => pools.get(geo) ?? (pools.set(geo, []), pools.get(geo)!);
+  for (const [country, keys] of Object.entries(topics)) pool(mapGeo(country)).push(...keys);
+  const site = new Map<string, { main: string[]; secondary: string[]; alts: string[] }>();
   for (const pages of map.values()) {
     for (const p of pages) {
       const geo = mapGeo(p.country);
-      const pool = pools.get(geo) ?? { main: [], secondary: [], alts: [] };
-      pool[p.role].push(p.key);
-      pool.alts.push(...p.alts);
-      pools.set(geo, pool);
+      const s = site.get(geo) ?? { main: [], secondary: [], alts: [] };
+      s[p.role].push(p.key);
+      s.alts.push(...p.alts);
+      site.set(geo, s);
     }
   }
+  for (const [geo, s] of site) pool(geo).push(...s.main, ...s.secondary, ...s.alts);
   const out: Record<string, string[]> = {};
-  for (const [geo, pool] of pools) {
+  for (const [geo, list] of pools) {
     const seen = new Set<string>();
     const keys: string[] = [];
-    for (const k of [...pool.main, ...pool.secondary, ...pool.alts]) {
+    for (const k of list) {
       const nk = normKey(k);
       if (!nk || seen.has(nk)) continue;
       seen.add(nk);

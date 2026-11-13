@@ -8,6 +8,13 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Country keywords as a column, from the topic.** In the group brief and
+  the CSV the country keywords are the last column, one per row of the
+  country block (5–10 per country; extra key-only rows when the block is
+  shorter). Topic keywords of the country from the FUT key map come first
+  (commercial coin groups by volume, no past seasons; `scripts/key-map.mjs`
+  adds them to the encrypted map), then the country's site keys. The sticky
+  brief header shows the current block ("futcoin · Spain").
 - **Country keywords in the group brief.** Each country block header lists up
   to 10 keywords of that country from the FUT key map (main keys of the
   country's sites first, then secondary keys and their variants); the CSV gets

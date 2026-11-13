@@ -328,6 +328,14 @@ CREATE TABLE IF NOT EXISTS key_map_hosts (
   added_at INTEGER NOT NULL
 );
 -- Ключ, которым зашифрована карта в открытом репозитории, и что уже взято.
+-- Ключи темы по странам из «Карты ключей FUT» (коммерческие группы «Монеты»,
+-- по частотности): идут в ТЗ группы колонкой «Ключи гео». Заменяются целиком
+-- при каждой новой карте.
+CREATE TABLE IF NOT EXISTS key_map_topics (
+  country TEXT PRIMARY KEY,
+  keys    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS key_map_state (
   id          INTEGER PRIMARY KEY CHECK (id = 1),
   private_key TEXT NOT NULL,

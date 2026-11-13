@@ -60,7 +60,7 @@ describe('метки сайтов', () => {
 });
 
 describe('ключи под страну', () => {
-  it('сначала главные ключи страны, потом второстепенные и варианты; без повторов; не больше 10', async () => {
+  it('сначала ключи темы страны, потом ключи сайтов; без повторов; 5–10 на блок', async () => {
     const { geoKeywords } = await import('../src/lib/utils/key-map');
     const p = (country: string, key: string, role: 'main' | 'secondary', alts: string[] = []) => ({ country, url: '/', key, role, alts });
     const map = new Map([
@@ -68,9 +68,12 @@ describe('ключи под страну', () => {
       ['coins-fc.it', [p('IT', 'fifa coins', 'main'), p('IT', 'Crediti FC 27', 'secondary')]],
       ['fut-coins.nl', [p('NL', 'fut coins', 'main'), ...Array.from({ length: 12 }, (_, i) => p('NL', `k${i}`, 'secondary'))]]
     ]);
-    const g = geoKeywords(map);
-    expect(g.Italy).toEqual(['crediti fc 27', 'fifa coins', 'crediti fifa 27', 'crediti fc27']);
-    expect(g.Netherlands).toHaveLength(10);
+    const g = geoKeywords(map, { IT: ['crediti fc 27', 'futcoin', 'fc 27 coins'] });
+    // Сначала ключи темы страны, потом ключи сайтов; без повторов.
+    expect(g.Italy).toEqual(['crediti fc 27', 'futcoin', 'fc 27 coins', 'fifa coins', 'crediti fifa 27', 'crediti fc27']);
+    expect(g.Netherlands).toHaveLength(13);
     expect(g.Netherlands[0]).toBe('fut coins');
+    const { geoKeyCount } = await import('../src/lib/utils/key-map');
+    expect([geoKeyCount(2, 15), geoKeyCount(8, 15), geoKeyCount(20, 15), geoKeyCount(20, 3)]).toEqual([5, 8, 10, 3]);
   });
 });

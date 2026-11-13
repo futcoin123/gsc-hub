@@ -86,7 +86,29 @@ export function buildKeyMap(data) {
   }
   const sorted = {};
   for (const h of Object.keys(hosts).sort()) sorted[h] = hosts[h].sort((a, b) => (a.role === b.role ? a.url.localeCompare(b.url) : a.role === 'main' ? -1 : 1));
-  return { mapUpdated: data.updated ?? null, hosts: sorted };
+  return { mapUpdated: data.updated ?? null, hosts: sorted, topics: buildTopics(data) };
+}
+
+// Ключи темы для ТЗ групп (колонка «Ключи гео», просьба владелицы 13.11.2026:
+// «любые ключи на эту тему, как они звучат в стране»): главные фразы
+// коммерческих групп о монетах, от частых к редким, без прошлых сезонов
+// (fc 26, fifa 23…). Не больше TOPICS на страну.
+export const TOPICS = 15;
+const COIN_TOPICS = new Set(['Монеты', 'Монеты по платформе', 'Монеты: сумма']);
+const OLD_SEASON = /\b(?:1\d|2[0-6])\b|\b20(?:1\d|2[0-6])\b/;
+export function buildTopics(data) {
+  const out = {};
+  for (const c of data.countries ?? []) {
+    const keys = [];
+    for (const g of [...(c.groups ?? [])].sort((a, b) => (b.s ?? 0) - (a.s ?? 0))) {
+      const h = norm(g.h);
+      if (g.k !== 'com' || !COIN_TOPICS.has(g.t) || !h || OLD_SEASON.test(h) || keys.includes(h)) continue;
+      keys.push(h);
+      if (keys.length >= TOPICS) break;
+    }
+    if (keys.length) out[c.id] = keys;
+  }
+  return out;
 }
 
 export const fingerprint = (pem) => createHash('sha256').update(pem.trim()).digest('hex').slice(0, 16);
@@ -127,6 +149,7 @@ async function main(argv) {
   const prev = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : null;
   const hosts = Object.keys(map.hosts);
   console.log(`Карта от ${map.mapUpdated}: ${hosts.length} сайтов, ${hosts.reduce((a, h) => a + map.hosts[h].length, 0)} страниц с ключами.`);
+  for (const [c, keys] of Object.entries(map.topics)) console.log(`  ключи темы ${c}: ${keys.length} (${keys.slice(0, 4).join(', ')}…)`);
   for (const h of hosts) {
     const main = map.hosts[h].filter((p) => p.role === 'main').map((p) => p.key);
     console.log(`  ${h}: главный ${main.join(' · ') || '—'}, второстепенных ${map.hosts[h].length - main.length}`);

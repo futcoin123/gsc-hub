@@ -3,6 +3,7 @@ import { siteHostname } from '$lib/utils/url-filters';
 import type { Db } from './db';
 import { nakedQuery, nakedAnchor, nakedVariant, NAKED_LABEL, type NakedVariant } from '$lib/utils/naked';
 import { blockCompare, labelKey } from '$lib/utils/site-label';
+import { geoKeyCount } from '$lib/utils/key-map';
 
 // Ключи группы: связки «страница + ключ», отобранные в Striking Distance.
 // Группа с датой в названии («28-10-26») — это закупка ссылок.
@@ -224,24 +225,37 @@ export function groupItemsCsv(
   const head = ['Группа', 'Метка', 'Сайт', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Язык', 'Гео', 'Ключи гео'];
   // Как ТЗ на странице группы: по метке сайта, внутри — по стране (blockCompare).
   const labelOf = (i: GroupItem) => labels[labelKey(i.siteUrl)] ?? null;
-  const row = (i: GroupItem) => ({ label: labelOf(i), geo: locale[i.page]?.geo ?? null, site: labelKey(i.siteUrl), page: i.page, query: i.query });
+  const geoOf = (i: GroupItem) => locale[i.page]?.geo ?? null;
+  const row = (i: GroupItem) => ({ label: labelOf(i), geo: geoOf(i), site: labelKey(i.siteUrl), page: i.page, query: i.query });
   const sorted = [...items].sort((a, b) => blockCompare(row(a), row(b)));
-  const lines = sorted.map((i) =>
-    [
-      groupName,
-      labelOf(i) ?? '',
-      i.siteUrl,
-      i.kind === 'naked' ? NAKED_LABEL[nakedVariant(i.query)] : 'Анкор',
-      i.page,
-      i.kind === 'naked' ? nakedAnchor(i.page, i.query) : i.query,
-      i.qty,
-      locale[i.page]?.language ?? '',
-      locale[i.page]?.geo ?? '',
-      (geoKeys[labelOf(i) ?? '']?.[locale[i.page]?.geo ?? ''] ?? []).join(', ')
-    ]
-      .map(csvCell)
-      .join(';')
-  );
+  // Ключи гео — столбиком, по одному в строке блока страны (владелица копирует
+  // колонку целиком): 5–10 на блок; не хватает строк — строки только с ключом.
+  const lines: string[] = [];
+  const line = (cells: unknown[]) => lines.push(cells.map(csvCell).join(';'));
+  for (let start = 0; start < sorted.length; ) {
+    const first = sorted[start];
+    let end = start + 1;
+    while (end < sorted.length && labelOf(sorted[end]) === labelOf(first) && geoOf(sorted[end]) === geoOf(first)) end++;
+    const geo = geoOf(first);
+    const pool = geo ? (geoKeys[labelOf(first) ?? '']?.[geo] ?? []) : [];
+    const keys = pool.slice(0, geoKeyCount(end - start, pool.length));
+    sorted.slice(start, end).forEach((i, n) =>
+      line([
+        groupName,
+        labelOf(i) ?? '',
+        i.siteUrl,
+        i.kind === 'naked' ? NAKED_LABEL[nakedVariant(i.query)] : 'Анкор',
+        i.page,
+        i.kind === 'naked' ? nakedAnchor(i.page, i.query) : i.query,
+        i.qty,
+        locale[i.page]?.language ?? '',
+        geo ?? '',
+        keys[n] ?? ''
+      ])
+    );
+    for (let n = end - start; n < keys.length; n++) line(['', '', '', '', '', '', '', '', '', keys[n]]);
+    start = end;
+  }
   return '\uFEFF' + [head.join(';'), ...lines].join('\r\n') + '\r\n';
 }
 

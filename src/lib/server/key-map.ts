@@ -26,6 +26,8 @@ export interface EncryptedMap {
 interface PlainMap {
   mapUpdated: string | null;
   hosts: Record<string, MapPage[]>;
+  /** Ключи темы по стране карты (IT, ES…), от частых к редким. */
+  topics?: Record<string, string[]>;
 }
 interface State {
   private_key: string;
@@ -92,6 +94,12 @@ export function importKeyMap(db: Db, enc: EncryptedMap): number | null {
       if (!Array.isArray(pages) || !pages.length) continue;
       added += add.run(normHost(host), JSON.stringify(pages), now).changes;
     }
+    // Ключи темы — не ключи сайтов: их берём из каждой новой карты целиком.
+    if (map!.topics && typeof map!.topics === 'object') {
+      db.prepare('DELETE FROM key_map_topics').run();
+      const put = db.prepare('INSERT INTO key_map_topics (country, keys) VALUES (?, ?)');
+      for (const [c, keys] of Object.entries(map!.topics)) if (Array.isArray(keys)) put.run(c, JSON.stringify(keys.filter((k) => typeof k === 'string')));
+    }
     db.prepare('UPDATE key_map_state SET map_hash = ?, map_updated = ?, imported_at = ? WHERE id = 1').run(enc.hash ?? null, map!.mapUpdated ?? null, now);
   })();
   return added;
@@ -117,4 +125,11 @@ export function keyMapAll(db: Db): Map<string, MapPage[]> {
   syncKeyMap(db);
   const rows = db.prepare('SELECT host, pages FROM key_map_hosts').all() as { host: string; pages: string }[];
   return new Map(rows.map((r) => [r.host, JSON.parse(r.pages) as MapPage[]]));
+}
+
+/** Ключи темы по стране карты: IT → [«crediti fc 27», …]. */
+export function keyMapTopics(db: Db): Record<string, string[]> {
+  syncKeyMap(db);
+  const rows = db.prepare('SELECT country, keys FROM key_map_topics').all() as { country: string; keys: string }[];
+  return Object.fromEntries(rows.map((r) => [r.country, JSON.parse(r.keys) as string[]]));
 }
