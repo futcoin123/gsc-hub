@@ -65,6 +65,17 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Dashboard is a table instead of cards.** One row per site: clicks,
+  impressions, CTR, position and their change (absolute and percent; position
+  ▲▼), a totals row on top, sorting by any column. A "Закупки ссылок" column
+  shows the latest link purchase from groups (date, link count, anchors on
+  hover) with "ещё N" for older ones, linking to the purchase report. Compare
+  with the previous period of the same length, a week earlier (periods up to
+  a week) or a chosen date. The chart opens when a row is expanded (periods
+  longer than a day). Stars pin favourites to the top; favourites are stored
+  in the panel per user (browser-stored stars move over by themselves).
+  Google search, CSV export and hide left the rows; previously hidden sites
+  sit collapsed at the bottom with a restore button.
 - **Checkouts are counted more honestly.** A checkout counts only if the same
   visitor opened the site before (marks now live in the database, not in
   memory: after every panel deploy, site tests passed as buyers for three

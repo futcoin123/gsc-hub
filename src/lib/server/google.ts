@@ -906,7 +906,9 @@ function totalsOf(rows: DailyRow[]): PeriodTotals {
 
 export async function fetchDailyBreakdown(
   db: Db,
-  days: number
+  days: number,
+  /** С чем сравнивать: свои даты; без них — прошлый период той же длины, сразу перед текущим. */
+  compare: { startDate: string; endDate: string } | null = null
 ): Promise<DailyBreakdownFanOut> {
   const accounts = listReportAccounts(db);
 
@@ -931,18 +933,18 @@ export async function fetchDailyBreakdown(
     }
   });
 
-  if (pairs.length === 0) return { entries: [], errors, comparable: canCompare(days) };
+  if (pairs.length === 0) return { entries: [], errors, comparable: compare ? true : canCompare(days) };
 
   // Both windows hold exactly `days` completed dates and sit next to each other,
   // so the comparison is between like and like.
   const now = Date.now();
   const { startDate: currentStart, endDate: currentEnd } = gscDateRange(days, now);
-  const prevEndAdj = addCalendarDays(currentStart, -1);
-  const prevStart = addCalendarDays(prevEndAdj, -(days - 1));
+  const prevEndAdj = compare?.endDate ?? addCalendarDays(currentStart, -1);
+  const prevStart = compare?.startDate ?? addCalendarDays(prevEndAdj, -(days - 1));
 
   // Per-pair: current, plus previous only when the history reaches it —
   // otherwise that is a second fan-out spent producing a fake -100%.
-  const comparable = canCompare(days);
+  const comparable = compare ? true : canCompare(days);
   const windows = pairs.flatMap(({ acc, site }) => [
     { acc, site, startDate: currentStart, endDate: currentEnd },
     ...(comparable ? [{ acc, site, startDate: prevStart, endDate: prevEndAdj }] : [])

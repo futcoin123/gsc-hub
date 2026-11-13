@@ -67,3 +67,18 @@ export function userPeriodKey(db: Db, uid: string | null = currentUserId()): str
 export function setUserPeriodKey(db: Db, uid: string, key: string): void {
   write(db, uid, 'period', key);
 }
+
+/** Избранные сайты Dashboard (домены без www) — свои у каждого пользователя. */
+export function userFavorites(db: Db, uid: string | null = currentUserId()): string[] {
+  if (!uid) return [];
+  try {
+    const v = JSON.parse(read(db, uid, 'favorites') ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setUserFavorites(db: Db, uid: string, hosts: Iterable<string>): void {
+  write(db, uid, 'favorites', JSON.stringify([...new Set(hosts)].sort()));
+}

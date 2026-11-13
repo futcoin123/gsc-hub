@@ -1,546 +1,420 @@
 <script lang="ts">
+  // Dashboard — все сайты таблицей, строка на сайт (просьба владелицы 13.11.2026:
+  // карточки занимали место и мешали сравнивать). Сортировка по любой колонке —
+  // видно, какой сайт упал, какой поднялся; изменения — к прошлому периоду или
+  // к выбранным датам; закупки ссылок; звёздочка — сайт в избранном (наверху).
+  // График — по раскрытию строки (при периоде длиннее дня).
   import PeriodNote from '$lib/components/PeriodNote.svelte';
+  import SortTh from '$lib/components/SortTh.svelte';
+  import SiteLabel from '$lib/components/SiteLabel.svelte';
+  import { TableSort } from '$lib/table-sort.svelte';
+  import { useLabels } from '$lib/site-labels.svelte';
+  import { labelKey } from '$lib/utils/site-label';
   import { page } from '$app/state';
-  import SortCaret from '$lib/components/SortCaret.svelte';
-  import type { PageData } from './$types';
   import { onMount } from 'svelte';
-  import { goto, invalidateAll } from '$app/navigation';
-  import { siteHref, siteDomain, siteSearchHref } from '$lib/utils/site';
+  import { goto } from '$app/navigation';
+  import { siteHref, siteDomain } from '$lib/utils/site';
   import { SERIES } from '$lib/chart-theme';
+  import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+  $effect.pre(() => useLabels(data.labels));
 
   type Entry = PageData['entries'][number];
   type DailyRow = Entry['current'][number];
-
+  const hostOf = (e: Entry) => labelKey(e.siteUrl);
   const keyOf = (e: Entry) => `${e.accountId}|${e.siteUrl}`;
 
-  // Hidden sites — server-side store, shared with /properties (keyed accountId|siteUrl).
-  let hidden = $state<Set<string>>(new Set());
-  // Favorites — localStorage (single-user tool, no backend table needed).
-  const FAVS_KEY = 'gsc-hub:favs';
+  // ── Избранное: в панели, у каждого пользователя своё ──
   let favs = $state<Set<string>>(new Set());
-
-  // Optional metric chips (CTR / position) — off by default, like the reference UI.
-  const METRICS_KEY = 'gsc-hub:metrics';
-  let showCtr = $state(false);
-  // Что рисовать на графиках карточек: всё сразу или одну метрику (клик по
-  // «Клики», «Показы», «Позиция» в карточке или в шапке; повторный клик — снова всё).
-  type ChartMetric = 'all' | 'clicks' | 'impressions' | 'position';
-  const CHART_KEY = 'gsc-hub:dash-chart';
-  let chart = $state<ChartMetric>('all');
-  function setChart(m: ChartMetric) {
-    chart = chart === m ? 'all' : m;
-    try { localStorage.setItem(CHART_KEY, chart); } catch { /* private mode */ }
+  $effect.pre(() => {
+    favs = new Set(data.favorites);
+  });
+  async function postFavs(body: unknown) {
+    try {
+      const r = await fetch('/dashboard/favorites', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      if (r.ok) favs = new Set(((await r.json()) as { favorites: string[] }).favorites);
+    } catch {
+      /* звёздочка останется до перезагрузки */
+    }
   }
-  const shows = (m: Exclude<ChartMetric, 'all'>) => chart === 'all' || chart === m;
-
-  // Today is deliberately outside the day ranges: it is still accumulating, so
-  // it cannot be compared against whole days without lying about the delta.
-  // Fetched after render because it costs one request per property.
-  type Today = {
-    date: string;
-    totals: { clicks: number; impressions: number };
-    bySite?: { siteUrl: string; accountId: string; clicks: number; impressions: number }[];
-    pending?: boolean;
-    startsAt?: string | null;
-    partial: boolean;
-    errors: { accountEmail: string; reason: string }[];
-  };
-  let today = $state<Today | null>(null);
-  // Сегодняшние цифры по сайтам — для метки «сегодня N» на карточке.
-  const todayBySite = $derived(new Map((today?.bySite ?? []).map((t) => [`${t.accountId}|${t.siteUrl}`, t])));
-  let todayFailed = $state(false);
-
-  // Отдельного блока «Сегодня» нет: период — один, в шапке.
-  function loadToday() {
-    return Promise.resolve();
+  function toggleFav(e: Entry) {
+    const h = hostOf(e);
+    const on = !favs.has(h);
+    const next = new Set(favs);
+    if (on) next.add(h);
+    else next.delete(h);
+    favs = next;
+    postFavs({ site: e.siteUrl, on });
   }
 
-  // С чем сравниваются проценты и позиция: прошлый период той же длины, сразу перед выбранным.
+  // ── Скрытые сайты (общий список с /properties): внизу, свёрнуто ──
+  let hidden = $state<Set<string>>(new Set());
+  async function unhide(e: Entry) {
+    const next = new Set(hidden);
+    next.delete(keyOf(e));
+    hidden = next;
+    try {
+      await fetch('/properties/hidden-sites', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ account: e.accountId, site: e.siteUrl }) });
+    } catch {
+      /* вернётся при следующей загрузке */
+    }
+  }
+
+  onMount(() => {
+    // Звёзды, которые раньше жили в браузере, — переносим в панель один раз.
+    try {
+      const old = JSON.parse(localStorage.getItem('gsc-hub:favs') ?? '[]') as string[];
+      if (old.length) postFavs({ add: old.map((k) => k.slice(k.indexOf('|') + 1)) }).then(() => localStorage.removeItem('gsc-hub:favs'));
+    } catch {
+      /* пустое или битое — нечего переносить */
+    }
+    fetch('/properties/hidden-sites')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: { hidden: string[] }) => (hidden = new Set(j.hidden)))
+      .catch(() => {});
+  });
+
+  // ── С чем сравниваем ──
   const shiftDay = (iso: string, n: number) => {
     const d = new Date(`${iso}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() + n);
     return d.toISOString().slice(0, 10);
   };
-  const fdm = (iso: string) => iso.split('-').reverse().join('.');
-  const cmpLabel = $derived.by(() => {
-    const p = (page.data as { period?: { startDate: string; endDate: string; days: number } }).period;
-    if (!p) return '';
-    const end = shiftDay(p.startDate, -1);
-    const start = shiftDay(end, -(p.days - 1));
-    return start === end ? fdm(end) : `${fdm(start)} – ${fdm(end)}`;
+  const fd = (iso: string) => iso.split('-').reverse().join('.');
+  const period = $derived((page.data as { period?: { startDate: string; endDate: string; days: number } }).period ?? null);
+  const cmpRange = $derived.by(() => {
+    if (data.cmp.start && data.cmp.end) return { start: data.cmp.start, end: data.cmp.end };
+    if (!period) return null;
+    const end = shiftDay(period.startDate, -1);
+    return { start: shiftDay(end, -(period.days - 1)), end };
+  });
+  const cmpLabel = $derived(cmpRange ? (cmpRange.start === cmpRange.end ? fd(cmpRange.start) : `${fd(cmpRange.start)} – ${fd(cmpRange.end)}`) : '');
+  let customDate = $state('');
+  function setCmp(v: string) {
+    const q = new URLSearchParams(page.url.searchParams);
+    if (v === 'prev') q.delete('cmp');
+    else q.set('cmp', v);
+    goto(`?${q}`, { keepFocus: true, noScroll: true });
+  }
+
+  // ── Цифры строки ──
+  const pct = (cur: number, prev: number): number | null => (prev ? Math.round(((cur - prev) / prev) * 100) : cur ? null : 0);
+  /** Позиция: плюс — поднялся (место стало меньше). */
+  const posMove = (cur: number, prev: number): number | null => (cur && prev ? Math.round((prev - cur) * 10) / 10 : null);
+  function figures(e: Entry) {
+    const c = e.currentTotals, p = e.previousTotals;
+    return {
+      clicks: c.clicks,
+      dClicks: data.comparable ? c.clicks - p.clicks : null,
+      pClicks: data.comparable ? pct(c.clicks, p.clicks) : null,
+      impr: c.impressions,
+      dImpr: data.comparable ? c.impressions - p.impressions : null,
+      pImpr: data.comparable ? pct(c.impressions, p.impressions) : null,
+      ctr: c.impressions ? c.ctr : null,
+      pos: c.position || null,
+      dPos: data.comparable ? posMove(c.position, p.position) : null
+    };
+  }
+
+  type K = 'site' | 'clicks' | 'dClicks' | 'impr' | 'dImpr' | 'ctr' | 'pos' | 'dPos' | 'buy';
+  const sort = new TableSort<K>('clicks', -1, ['clicks', 'dClicks', 'impr', 'dImpr', 'ctr', 'dPos', 'buy']);
+  const sortValue = (e: Entry, k: K): string | number | null => {
+    if (e.error && k !== 'site' && k !== 'buy') return null;
+    if (k === 'site') return siteDomain(e.siteUrl);
+    if (k === 'buy') return e.buys[0]?.date ?? null;
+    return figures(e)[k];
+  };
+  const visible = $derived(data.entries.filter((e) => !hidden.has(keyOf(e))));
+  // Избранные — всегда наверху, в том же порядке сортировки.
+  const rows = $derived.by(() => {
+    const sorted = sort.apply(visible, sortValue);
+    return [...sorted.filter((e) => favs.has(hostOf(e))), ...sorted.filter((e) => !favs.has(hostOf(e)))];
+  });
+  const hiddenRows = $derived(data.entries.filter((e) => hidden.has(keyOf(e))));
+
+  const totals = $derived.by(() => {
+    let c = 0, i = 0, pc = 0, pi = 0, pw = 0, ppw = 0;
+    for (const e of visible) {
+      if (e.error) continue;
+      c += e.currentTotals.clicks;
+      i += e.currentTotals.impressions;
+      pc += e.previousTotals.clicks;
+      pi += e.previousTotals.impressions;
+      pw += e.currentTotals.position * e.currentTotals.impressions;
+      ppw += e.previousTotals.position * e.previousTotals.impressions;
+    }
+    const pos = i ? pw / i : 0, ppos = pi ? ppw / pi : 0;
+    return {
+      clicks: c, dClicks: data.comparable ? c - pc : null, pClicks: data.comparable ? pct(c, pc) : null,
+      impr: i, dImpr: data.comparable ? i - pi : null, pImpr: data.comparable ? pct(i, pi) : null,
+      ctr: i ? c / i : null, pos: pos || null, dPos: data.comparable ? posMove(pos, ppos) : null
+    };
   });
 
-  let refreshError = $state<string | null>(null);
-
-  onMount(() => {
-    try {
-      const raw = localStorage.getItem(FAVS_KEY);
-      if (raw) favs = new Set(JSON.parse(raw) as string[]);
-      const m = JSON.parse(localStorage.getItem(METRICS_KEY) ?? '{}') as { ctr?: boolean };
-      showCtr = m.ctr === true;
-      const c = localStorage.getItem(CHART_KEY);
-      if (c === 'clicks' || c === 'impressions' || c === 'position') chart = c;
-    } catch {
-      // corrupted prefs are not worth a broken dashboard
-    }
-    loadToday();
-    fetch('/properties/hidden-sites')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { hidden: string[] }) => { hidden = new Set(j.hidden); })
-      .catch((e) => console.warn('Failed to load hidden sites:', e));
-  });
-
-  function toggleFav(e: Entry) {
+  // ── Раскрытая строка: график ──
+  let open = $state<Set<string>>(new Set());
+  const canOpen = $derived(data.days > 1);
+  function toggleOpen(e: Entry) {
+    if (!canOpen) return;
     const k = keyOf(e);
-    const next = new Set(favs);
-    if (next.has(k)) next.delete(k);
-    else next.add(k);
-    favs = next;
-    try { localStorage.setItem(FAVS_KEY, JSON.stringify([...next])); } catch { /* private mode */ }
+    const n = new Set(open);
+    if (n.has(k)) n.delete(k);
+    else n.add(k);
+    open = n;
   }
 
-  async function toggleHide(e: Entry) {
-    const k = keyOf(e);
-    const isHidden = hidden.has(k);
-    const next = new Set(hidden);
-    if (isHidden) next.delete(k);
-    else next.add(k);
-    hidden = next;
-    try {
-      await fetch('/properties/hidden-sites', {
-        method: isHidden ? 'DELETE' : 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ account: e.accountId, site: e.siteUrl })
-      });
-    } catch {
-      // revert on failure so the UI never lies about persisted state
-      hidden = new Set(hidden);
-      if (isHidden) hidden.add(k); else hidden.delete(k);
-    }
-  }
-
-  function toggleMetric(m: 'ctr') {
-    if (m === 'ctr') showCtr = !showCtr;
-    try { localStorage.setItem(METRICS_KEY, JSON.stringify({ ctr: showCtr })); } catch { /* ignore */ }
-  }
-
-  const visibleEntries = $derived(
-    data.entries.filter((e) => !hidden.has(keyOf(e)))
-  );
-  const favEntries = $derived(visibleEntries.filter((e) => favs.has(keyOf(e))));
-  const restEntries = $derived(visibleEntries.filter((e) => !favs.has(keyOf(e))));
-  const hiddenEntries = $derived(data.entries.filter((e) => hidden.has(keyOf(e))));
-
-  // Custom day range, capped at GSC's 16-month window (480 days).
-  function goToDays(raw: string | number) {
-    const n = Math.floor(Number(raw));
-    if (!Number.isFinite(n) || n < 1) return;
-    goto(`?days=${Math.min(n, 480)}&cols=${data.cols}&sort=${data.sort}&dir=${data.dir}`);
-  }
-
-  // Toggle direction when re-clicking the active field, else default to desc.
-  function sortHref(field: 'clicks' | 'impressions') {
-    const dir = data.sort === field && data.dir === 'desc' ? 'asc' : 'desc';
-    return `?days=${data.days}&cols=${data.cols}&sort=${field}&dir=${dir}`;
-  }
-
-  const nf = new Intl.NumberFormat('en-US');
-  function fmtNum(n: number) { return nf.format(Math.round(n)); }
-  function fmtK(n: number) {
-    const r = Math.round(n);
-    if (r >= 1000) return `${(r / 1000).toFixed(1).replace(/\.0$/, '')}k`;
-    return String(r);
-  }
-  function fmtCtr(c: number) { return (c * 100).toFixed(1) + '%'; }
-  function fmtPos(p: number) { return p.toFixed(1); }
-
-  // Rounded percent change vs the previous period; null when there is no base.
-  function pctDelta(cur: number, prev: number): number | null {
-    if (!prev) return null;
-    return Math.round(((cur - prev) / prev) * 100);
-  }
-
-  // Позиция: на сколько мест сдвинулась к прошлому периоду (плюс — стала выше).
-  function posDelta(cur: number, prev: number): number | null {
-    if (!cur || !prev) return null;
-    return Math.round((prev - cur) * 10) / 10;
-  }
-
-  // Позиция на графике: лучшее место — наверху; дни без показов — разрыв.
-  function posPath(rows: DailyRow[]): string {
-    const vals = rows.filter((r) => r.impressions > 0 && r.position > 0).map((r) => r.position);
-    if (!vals.length) return '';
-    const lo = Math.min(...vals), hi = Math.max(...vals);
-    const yTop = CHART_H * 0.08, yBottom = CHART_H * 0.92;
-    const yOf = (v: number) => (hi === lo ? (yTop + yBottom) / 2 : yTop + ((v - lo) / (hi - lo)) * (yBottom - yTop));
-    const step = rows.length > 1 ? CHART_W / (rows.length - 1) : 0;
-    let d = '';
-    let open = false;
-    rows.forEach((r, i) => {
-      if (!(r.impressions > 0 && r.position > 0)) { open = false; return; }
-      d += `${open ? ' L' : ' M'}${(i * step).toFixed(2)},${yOf(r.position).toFixed(2)}`;
-      open = true;
-    });
-    return d.trim();
-  }
-
-  // ── Chart: dual-metric sparkline, each series normalized to its own range so
-  // clicks stay visible next to impressions. Previous period is dashed. ──
-  const CHART_W = 100;
-  const CHART_H = 40;
-
-  function seriesPath(rows: DailyRow[], key: 'clicks' | 'impressions'): string {
-    if (rows.length === 0) return '';
-    const vals = rows.map((r) => r[key]);
-    const lo = Math.min(...vals);
-    const hi = Math.max(...vals);
-    const yTop = CHART_H * 0.08;
-    const yBottom = CHART_H * 0.92;
-    const yOf = (v: number) =>
-      hi === lo ? (yTop + yBottom) / 2 : yBottom - ((v - lo) / (hi - lo)) * (yBottom - yTop);
-    const step = rows.length > 1 ? CHART_W / (rows.length - 1) : 0;
-    return rows
-      .map((r, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(2)},${yOf(r[key]).toFixed(2)}`)
-      .join(' ');
-  }
-
-  function areaPath(rows: DailyRow[], key: 'clicks' | 'impressions'): string {
-    const line = seriesPath(rows, key);
-    if (!line) return '';
-    const step = rows.length > 1 ? CHART_W / (rows.length - 1) : 0;
-    return `${line} L${((rows.length - 1) * step).toFixed(2)},${CHART_H} L0,${CHART_H} Z`;
-  }
-
-  // Event marker x on a card sparkline: snap to the nearest data day, clamp to the
-  // edges so an event outside the window still shows up (at the border).
-  function eventX(rows: DailyRow[], date: string): number | null {
-    if (rows.length === 0) return null;
-    let i = rows.findIndex((r) => r.date >= date);
-    if (i === -1) i = rows.length - 1;
-    const step = rows.length > 1 ? CHART_W / (rows.length - 1) : 0;
-    return Math.min(CHART_W, Math.max(0, i * step));
-  }
-
-  // Market chip — derived from the ccTLD; generic TLDs read as "unknown market".
-  const GENERIC_TLDS = new Set([
-    'com', 'net', 'org', 'edu', 'gov', 'int', 'mil', 'io', 'co', 'ai', 'app',
-    'dev', 'me', 'tv', 'info', 'xyz', 'online', 'site', 'store', 'tech', 'top',
-    'club', 'pro', 'biz', 'cloud', 'website', 'space', 'fun', 'shop', 'live',
-    'life', 'world', 'link', 'zone', 'blog', 'news'
-  ]);
-  function marketOf(siteUrl: string): string | null {
-    const d = siteDomain(siteUrl).replace(/^www\./, '');
-    const parts = d.split('.').filter(Boolean);
-    if (parts.length < 2) return null;
-    const tld = parts[parts.length - 1].toLowerCase();
-    if (tld.length !== 2 || GENERIC_TLDS.has(tld)) return null;
-    return tld.toUpperCase();
-  }
-
+  const nf = new Intl.NumberFormat('ru-RU');
+  const fmt = (n: number) => nf.format(Math.round(n));
+  const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt(Math.abs(n))}`;
   function siteDetailHref(e: Entry) {
     return `/properties/${encodeURIComponent(e.siteUrl)}?acc=${encodeURIComponent(e.accountId)}`;
   }
 
-  function colsClass(n: number): string {
-    if (n === 2) return 'grid-cols-1 md:grid-cols-2';
-    if (n === 4) return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
-    return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6';
+  // ── График: клики и показы — каждая линия в своём масштабе, позиция —
+  // лучшее место наверху; сравниваемый период — пунктиром. ──
+  const W = 100, H = 40;
+  function seriesPath(rs: DailyRow[], key: 'clicks' | 'impressions'): string {
+    if (!rs.length) return '';
+    const vals = rs.map((r) => r[key]);
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const yOf = (v: number) => (hi === lo ? H / 2 : H * 0.92 - ((v - lo) / (hi - lo)) * H * 0.84);
+    const step = rs.length > 1 ? W / (rs.length - 1) : 0;
+    return rs.map((r, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(2)},${yOf(r[key]).toFixed(2)}`).join(' ');
   }
-
+  function areaPath(rs: DailyRow[]): string {
+    const line = seriesPath(rs, 'clicks');
+    if (!line) return '';
+    const step = rs.length > 1 ? W / (rs.length - 1) : 0;
+    return `${line} L${((rs.length - 1) * step).toFixed(2)},${H} L0,${H} Z`;
+  }
+  function posPath(rs: DailyRow[]): string {
+    const vals = rs.filter((r) => r.impressions > 0 && r.position > 0).map((r) => r.position);
+    if (!vals.length) return '';
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const yOf = (v: number) => (hi === lo ? H / 2 : H * 0.08 + ((v - lo) / (hi - lo)) * H * 0.84);
+    const step = rs.length > 1 ? W / (rs.length - 1) : 0;
+    let d = '', on = false;
+    rs.forEach((r, i) => {
+      if (!(r.impressions > 0 && r.position > 0)) return void (on = false);
+      d += `${on ? ' L' : ' M'}${(i * step).toFixed(2)},${yOf(r.position).toFixed(2)}`;
+      on = true;
+    });
+    return d.trim();
+  }
+  function eventX(rs: DailyRow[], date: string): number | null {
+    if (!rs.length) return null;
+    let i = rs.findIndex((r) => r.date >= date);
+    if (i === -1) i = rs.length - 1;
+    return Math.min(W, Math.max(0, i * (rs.length > 1 ? W / (rs.length - 1) : 0)));
+  }
 </script>
-
 
 <svelte:head><title>Dashboard — gsc-hub</title></svelte:head>
 
-{#snippet deltaChip(d: number | null, invert = false)}
-  {#if data.comparable && d !== null && d !== 0}
-    <span class="pii chip {(invert ? d <= 0 : d >= 0) ? 'chip-up' : 'chip-dn'}">{d > 0 ? '+' : '−'}{Math.abs(d)}%</span>
+{#snippet delta(d: number | null, p: number | null)}
+  {#if d === null}
+    <span class="text-ink-4">—</span>
+  {:else if d === 0}
+    <span class="text-ink-3">0</span>
+  {:else}
+    <span class="pii whitespace-nowrap {d > 0 ? 'text-up' : 'text-dn'}">{signed(d)}{#if p !== null && p !== 0}<span class="ml-1 text-[11px] opacity-80">{p > 0 ? '+' : '−'}{Math.abs(p)}%</span>{/if}</span>
   {/if}
 {/snippet}
 
-{#snippet metricCell(label: string, value: string, d: number | null, invert = false)}
-  <div class="flex min-w-0 flex-col">
-    <span class="text-[10px] font-medium uppercase tracking-[0.05em] text-ink-2">{label}</span>
-    <span class="flex items-center gap-1 whitespace-nowrap">
-      <span class="pii app-num font-semibold text-ink">{value}</span>
-      {@render deltaChip(d, invert)}
-    </span>
-  </div>
+{#snippet posDelta(d: number | null)}
+  {#if d === null}
+    <span class="text-ink-4">—</span>
+  {:else if d === 0}
+    <span class="text-ink-3">0</span>
+  {:else}
+    <span class="pii whitespace-nowrap {d > 0 ? 'text-up' : 'text-dn'}" title={d > 0 ? `Поднялся на ${d}` : `Опустился на ${Math.abs(d)}`}>{d > 0 ? '▲' : '▼'}{Math.abs(d)}</span>
+  {/if}
 {/snippet}
 
-{#snippet metricToggle(m: 'clicks' | 'impressions' | 'position', label: string, value: string, d: number | null, kind: '%' | 'pos')}
-  {@const solo = chart === m}
-  <button
-    type="button"
-    class="flex min-w-0 flex-col items-start rounded px-1 py-0.5 text-left transition-colors hover:bg-sunk {solo ? 'bg-acc-t' : ''}"
-    title={solo ? 'Показать на графике всё' : `Оставить на графике только: ${label.toLowerCase()}`}
-    onclick={() => setChart(m)}
-  >
-    <span class="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-2">
-      <i class="inline-block h-0.5 w-2.5 rounded-full {m === 'position' ? 'bg-ink' : ''}" style:background={m === 'clicks' ? SERIES.clicks : m === 'impressions' ? SERIES.impr : undefined}></i>{label}
-    </span>
-    <span class="pii app-num text-[13px] font-semibold text-ink">{value}</span>
-    {#if data.comparable && d !== null && d !== 0}
-      {#if kind === 'pos'}
-        <span class="pii chip {d > 0 ? 'chip-up' : 'chip-dn'}" title="К {cmpLabel || 'прошлому периоду'}: позиция {d > 0 ? 'выше' : 'ниже'} на {Math.abs(d)}">{d > 0 ? '▲' : '▼'}{Math.abs(d)}</span>
-      {:else}
-        <span class="pii chip {d > 0 ? 'chip-up' : 'chip-dn'}" title="К {cmpLabel || 'прошлому периоду той же длины'}">{d > 0 ? '+' : '−'}{Math.abs(d)}%</span>
-      {/if}
-    {:else if data.comparable}
-      <span class="text-[10px] text-ink-2" title="К {cmpLabel || 'прошлому периоду той же длины'}">без изменений</span>
+{#snippet buysCell(e: Entry)}
+  {@const last = e.buys[0]}
+  {#if !last}
+    <span class="text-ink-4">—</span>
+  {:else}
+    <a class="whitespace-nowrap hover:text-acc hover:underline" href="/purchases?g={last.groupId}" title="Группа {last.name}: {last.anchors.join(', ')}. Нажмите — что изменилось после закупки">{fd(last.date)} · {last.qty} ссыл.</a>
+    {#if e.buys.length > 1}
+      <details class="relative inline-block">
+        <summary class="ml-1 cursor-pointer list-none rounded bg-sunk px-1 text-[10px] text-ink-2" title="Все закупки ссылок на этот сайт">ещё {e.buys.length - 1}</summary>
+        <ul class="absolute right-0 z-20 mt-1 min-w-[16rem] rounded border border-line bg-pane p-1 text-left shadow-lg">
+          {#each e.buys as b (b.groupId)}
+            <li><a class="block whitespace-nowrap rounded px-2 py-0.5 hover:bg-sunk" href="/purchases?g={b.groupId}" title={b.anchors.join(', ')}>{fd(b.date)} · {b.qty} ссыл. · {b.name}</a></li>
+          {/each}
+        </ul>
+      </details>
     {/if}
-  </button>
+  {/if}
 {/snippet}
 
-{#snippet siteCard(e: Entry, uid: string, dim = false)}
-  {@const dC = pctDelta(e.currentTotals.clicks, e.previousTotals.clicks)}
-  {@const dI = pctDelta(e.currentTotals.impressions, e.previousTotals.impressions)}
-  {@const dP = posDelta(e.currentTotals.position, e.previousTotals.position)}
-  {@const isFav = favs.has(keyOf(e))}
-  {@const isHidden = hidden.has(keyOf(e))}
-  {@const market = marketOf(e.siteUrl)}
+{#snippet row(e: Entry, dim: boolean)}
+  {@const f = figures(e)}
+  {@const isOpen = open.has(keyOf(e))}
   {@const domain = siteDomain(e.siteUrl)}
-  <article
-    class="pane flex min-w-0 cursor-pointer flex-col transition-colors hover:border-ink-4 {dim ? 'opacity-60' : ''}"
-    role="link"
-    tabindex="0"
-    onclick={() => goto(siteDetailHref(e))}
-    onkeydown={(ev) => { if (ev.key === 'Enter') goto(siteDetailHref(e)); }}
-  >
-    <!-- Header: favicon + domain, market/account meta; clicks on the right -->
-    <header class="flex items-start justify-between gap-2 px-3 pt-2.5">
-      <div class="flex min-w-0 flex-col gap-0.5">
-        <div class="flex min-w-0 items-center gap-1.5">
-          <img
-            src="https://www.google.com/s2/favicons?sz=64&domain={encodeURIComponent(domain)}"
-            width="14"
-            height="14"
-            alt=""
-            loading="lazy"
-            class="pii shrink-0 rounded-sm"
-            onerror={(ev) => ((ev.currentTarget as HTMLImageElement).style.display = 'none')}
-          />
-          <span class="pii truncate text-[13px] font-semibold text-ink">{domain}</span>
-
-        </div>
-        <div class="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-3">
-          {#if market}
-            <span class="badge badge-muted px-1 py-0 font-mono text-[10px] font-semibold" title="Market (from ccTLD)">{market}</span>
-          {:else}
-            <span class="badge badge-warn px-1 py-0 text-[10px]" title="Unknown market — generic TLD">no market</span>
-          {/if}
-          <span class="pii truncate">{e.accountLabel ?? e.accountEmail}</span>
-        </div>
-      </div>
-    </header>
-
-    <!-- Клики, показы, позиция с изменением к прошлому периоду; клик — только эта метрика на графике -->
-    <div class="mt-2 grid grid-cols-3 gap-1 px-3" role="presentation" onclick={(ev) => ev.stopPropagation()} onkeydown={(ev) => ev.stopPropagation()}>
-      {@render metricToggle('clicks', 'Клики', fmtNum(e.currentTotals.clicks), dC, '%')}
-      {@render metricToggle('impressions', 'Показы', fmtK(e.currentTotals.impressions), dI, '%')}
-      {@render metricToggle('position', 'Позиция', e.currentTotals.position ? fmtPos(e.currentTotals.position) : '—', dP, 'pos')}
-    </div>
-
-    <!-- Chart: clicks line over a faint area, previous period dashed, impressions thin gray -->
+  <tr class="{canOpen ? 'cursor-pointer' : ''} {dim ? 'opacity-60' : ''}" class:is-selected={isOpen} onclick={() => toggleOpen(e)}>
+    <td class="w-8 text-center" onclick={(ev) => ev.stopPropagation()}>
+      {#if dim}
+        <button type="button" class="btn btn-ghost btn-sm text-xs" title="Вернуть сайт в таблицу" onclick={() => unhide(e)}>вернуть</button>
+      {:else}
+        <button type="button" class="fav {favs.has(hostOf(e)) ? 'is-on' : ''}" aria-pressed={favs.has(hostOf(e))} title={favs.has(hostOf(e)) ? 'Убрать из избранного' : 'В избранное — сайт будет наверху таблицы'} onclick={() => toggleFav(e)}>
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill={favs.has(hostOf(e)) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+        </button>
+      {/if}
+    </td>
+    <td class="font-semibold text-ink">
+      <span class="flex items-center gap-1.5">
+        {#if canOpen}<svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {isOpen ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>{/if}
+        <a class="pii hover:text-acc hover:underline" href={siteDetailHref(e)} onclick={(ev) => ev.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">{domain}</a>
+        <span onclick={(ev) => ev.stopPropagation()} role="presentation"><SiteLabel site={e.siteUrl} /></span>
+        <a class="inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(e.siteUrl)} target="_blank" rel="noopener noreferrer" title="Открыть сайт (в новой вкладке)" aria-label="Открыть сайт {domain}" onclick={(ev) => ev.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
+      </span>
+    </td>
     {#if e.error}
-      <div class="pii mx-3 mt-2 rounded bg-dn-t px-2 py-1.5 text-[11px] text-dn">{e.error}</div>
+      <td colspan="7" class="pii text-xs text-bad" title={e.error}>не загрузилось: {e.error.slice(0, 80)}</td>
     {:else}
-      <svg viewBox="0 0 {CHART_W} {CHART_H}" class="mt-1.5 h-16 w-full px-3" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="gc-{uid}" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color={SERIES.clicks} stop-opacity="0.12" />
-            <stop offset="100%" stop-color={SERIES.clicks} stop-opacity="0" />
-          </linearGradient>
-        </defs>
-        {#if data.comparable && e.previous.length > 0}
-          {#if shows('impressions')}<path d={seriesPath(e.previous, 'impressions')} fill="none" stroke={SERIES.prev} stroke-width="1" stroke-opacity="0.6" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" />{/if}
-          {#if shows('clicks')}<path d={seriesPath(e.previous, 'clicks')} fill="none" stroke={SERIES.prev} stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />{/if}
-          {#if chart === 'position'}<path d={posPath(e.previous)} fill="none" stroke={SERIES.prev} stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />{/if}
-        {/if}
-        {#if shows('impressions')}<path d={seriesPath(e.current, 'impressions')} fill="none" stroke={SERIES.impr} stroke-width="1" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />{/if}
-        {#if shows('clicks')}
-          <path d={areaPath(e.current, 'clicks')} fill="url(#gc-{uid})" />
-          <path d={seriesPath(e.current, 'clicks')} fill="none" stroke={SERIES.clicks} stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-        {/if}
-        {#if shows('position')}<path class="text-ink" d={posPath(e.current)} fill="none" stroke="currentColor" stroke-width={chart === 'position' ? 1.6 : 1.1} stroke-opacity={chart === 'position' ? 1 : 0.7} stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />{/if}
-        {#each e.events as ev (ev.id)}
-          {@const ex = eventX(e.current, ev.date)}
-          {#if ex !== null}
-            <line x1={ex} x2={ex} y1="1" y2={CHART_H - 1} stroke={ev.color} stroke-width="1.25" stroke-opacity="0.85" vector-effect="non-scaling-stroke">
-              <title>{ev.label} · {ev.date}</title>
-            </line>
-          {/if}
-        {/each}
-      </svg>
+      <td class="num app-num pii font-semibold">{fmt(f.clicks)}</td>
+      <td class="num app-num">{@render delta(f.dClicks, f.pClicks)}</td>
+      <td class="num app-num pii">{fmt(f.impr)}</td>
+      <td class="num app-num">{@render delta(f.dImpr, f.pImpr)}</td>
+      <td class="num app-num pii">{f.ctr === null ? '—' : (f.ctr * 100).toFixed(1) + '%'}</td>
+      <td class="num app-num pii">{f.pos === null ? '—' : f.pos.toFixed(1)}</td>
+      <td class="num app-num">{@render posDelta(f.dPos)}</td>
     {/if}
-
-    <!-- Footer: compact stats + action buttons -->
-    <footer
-      class="mt-1.5 flex items-end justify-between gap-2 border-t border-line-soft px-3 py-1.5"
-      onclick={(ev) => ev.stopPropagation()}
-      onkeydown={(ev) => ev.stopPropagation()}
-      role="presentation"
-    >
-      <div class="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
-        {#if showCtr}
-          {@render metricCell('CTR', fmtCtr(e.currentTotals.ctr), pctDelta(e.currentTotals.ctr, e.previousTotals.ctr))}
-        {/if}
-      </div>
-      <div class="-mr-1.5 flex shrink-0 items-center">
-        <a class="btn btn-ghost btn-sm btn-icon text-ink-3" href={siteHref(e.siteUrl)} target="_blank" rel="noopener noreferrer" onclick={(ev) => ev.stopPropagation()} title="Open site">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg>
-        </a>
-        <a class="btn btn-ghost btn-sm btn-icon text-ink-3" href={siteSearchHref(e.siteUrl)} target="_blank" rel="noopener noreferrer" title="Search site on Google">
-          <span class="text-[11px] font-extrabold leading-none">G</span>
-        </a>
-        <a
-          class="btn btn-ghost btn-sm btn-icon text-ink-3"
-          href="/properties/export?account={encodeURIComponent(e.accountId)}&site={encodeURIComponent(e.siteUrl)}&days={data.days}&dim=query"
-          download
-          title="Export CSV (queries, {data.days}d)"
-        >
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10.5v2h11v-2M5 7l3 3 3-3M8 10V2.5"/></svg>
-        </a>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-icon {isHidden ? 'bg-acc-t text-acc hover:bg-acc-t hover:text-acc' : 'text-ink-3'}"
-          onclick={() => toggleHide(e)}
-          title={isHidden ? 'Unhide site' : 'Hide site'}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
-        </button>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm btn-icon {isFav ? 'text-acc hover:text-acc' : 'text-ink-3'}"
-          onclick={() => toggleFav(e)}
-          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-        >
-          <svg viewBox="0 0 24 24" fill={isFav ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-        </button>
-      </div>
-    </footer>
-  </article>
-{/snippet}
-
-{#snippet sectionHead(label: string, count: number)}
-  <div class="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">
-    {label} <span class="font-mono font-normal">{count}</span>
-  </div>
+    <td class="text-xs" onclick={(ev) => ev.stopPropagation()}>{@render buysCell(e)}</td>
+  </tr>
+  {#if isOpen && !e.error}
+    <tr class="bg-sunk hover:bg-sunk">
+      <td></td>
+      <td colspan="9" class="py-2 pr-3">
+        <div class="mb-1 flex flex-wrap items-center gap-3 text-[11px] text-ink-3">
+          <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.clicks}></i>клики</span>
+          <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.impr}></i>показы</span>
+          <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full bg-ink"></i>позиция (выше — лучше)</span>
+          {#if data.comparable && e.previous.length}<span class="flex items-center gap-1"><i class="inline-block w-3 border-t border-dashed" style:border-color={SERIES.prev}></i>{cmpLabel}</span>{/if}
+          {#if e.current.length}<span class="ml-auto">{fd(e.current[0].date)} – {fd(e.current[e.current.length - 1].date)}</span>{/if}
+        </div>
+        <svg viewBox="0 0 {W} {H}" class="h-28 w-full" preserveAspectRatio="none" aria-hidden="true">
+          {#if data.comparable && e.previous.length}
+            <path d={seriesPath(e.previous, 'impressions')} fill="none" stroke={SERIES.prev} stroke-width="1" stroke-opacity="0.6" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" />
+            <path d={seriesPath(e.previous, 'clicks')} fill="none" stroke={SERIES.prev} stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
+          {/if}
+          <path d={seriesPath(e.current, 'impressions')} fill="none" stroke={SERIES.impr} stroke-width="1" vector-effect="non-scaling-stroke" />
+          <path d={areaPath(e.current)} fill={SERIES.clicks} fill-opacity="0.08" />
+          <path d={seriesPath(e.current, 'clicks')} fill="none" stroke={SERIES.clicks} stroke-width="1.6" vector-effect="non-scaling-stroke" />
+          <path class="text-ink" d={posPath(e.current)} fill="none" stroke="currentColor" stroke-width="1.1" stroke-opacity="0.75" vector-effect="non-scaling-stroke" />
+          {#each e.events as ev (ev.id)}
+            {@const ex = eventX(e.current, ev.date)}
+            {#if ex !== null}<line x1={ex} x2={ex} y1="1" y2={H - 1} stroke={ev.color} stroke-width="1.25" vector-effect="non-scaling-stroke"><title>{ev.label} · {ev.date}</title></line>{/if}
+          {/each}
+        </svg>
+      </td>
+    </tr>
+  {/if}
 {/snippet}
 
 <main class="page">
   <header class="app-toolbar">
     <div class="app-toolbar-left">
-      <nav class="app-breadcrumbs">
-        <a href="/">Accounts</a>
-        <span aria-hidden="true">/</span>
-        <span class="text-ink-2">Dashboard</span>
-      </nav>
       <h1 class="app-pagetitle">Dashboard</h1>
     </div>
     <div class="app-toolbar-right">
-      <PeriodNote note={data.comparable && cmpLabel ? `проценты и ▲▼ — к ${cmpLabel}` : ''} />
-      <span class="app-toolbar-divider" aria-hidden="true"></span>
-      <div class="app-segmented">
-        <span class="app-segmented-label">Sort</span>
-        <a class:is-active={data.sort === 'clicks'} href={sortHref('clicks')}>Clicks<SortCaret dir={data.sort === 'clicks' ? data.dir : ''} /></a>
-        <a class:is-active={data.sort === 'impressions'} href={sortHref('impressions')}>Impr<SortCaret dir={data.sort === 'impressions' ? data.dir : ''} /></a>
+      <PeriodNote note={data.comparable && cmpLabel ? `изменения — к ${cmpLabel}` : ''} />
+      <div class="app-segmented" title="С чем сравнивать выбранный период: колонки «±» и пунктир на графике">
+        <span class="app-segmented-label">Сравнить с</span>
+        <button type="button" class:is-active={data.cmp.key === 'prev'} onclick={() => setCmp('prev')} title="Прошлый период той же длины, сразу перед выбранным">прошлым периодом</button>
+        {#if data.days <= 7}<button type="button" class:is-active={data.cmp.key === 'week'} onclick={() => setCmp('week')} title="Те же дни неделю назад">неделей раньше</button>{/if}
+        <label class="flex items-center gap-1 px-1.5 {data.cmp.key === 'custom' ? 'is-active' : ''}" title="Свой день начала: сравнится период той же длины, начиная с этого дня">
+          <span class="text-[12px]">датой</span>
+          <input type="date" class="input h-6 px-1 text-[12px]" max={period ? shiftDay(period.startDate, -1) : undefined} value={data.cmp.key === 'custom' ? data.cmp.start : customDate} onchange={(ev) => { customDate = ev.currentTarget.value; if (customDate) setCmp(customDate); }} />
+        </label>
       </div>
-      <div class="app-segmented">
-        <span class="app-segmented-label">Metrics</span>
-        <button type="button" class:is-active={showCtr} onclick={() => toggleMetric('ctr')}>CTR</button>
-      </div>
-      <div class="app-segmented" title="Что показывать на графиках карточек">
-        <span class="app-segmented-label">График</span>
-        <button type="button" class:is-active={chart === 'all'} onclick={() => setChart('all')}>Всё</button>
-        <button type="button" class:is-active={chart === 'clicks'} onclick={() => setChart('clicks')}>Клики</button>
-        <button type="button" class:is-active={chart === 'impressions'} onclick={() => setChart('impressions')}>Показы</button>
-        <button type="button" class:is-active={chart === 'position'} onclick={() => setChart('position')}>Позиция</button>
-      </div>
-      <div class="app-segmented">
-        <span class="app-segmented-label">Cols</span>
-        {#each [2, 4, 6] as c}
-          <a class:is-active={data.cols === c} href="?days={data.days}&cols={c}&sort={data.sort}&dir={data.dir}">{c}</a>
-        {/each}
-      </div>
-      <span class="app-toolbar-divider" aria-hidden="true"></span>
-      <a href="/properties?days={data.days}" class="btn btn-ghost">Sites</a>
-      <button
-        type="button"
-        class="btn btn-sec"
-        onclick={async () => {
-          // Refresh promises fresh numbers: drop the 60-minute GSC cache first,
-          // then re-run the load and Today, which lives outside page data.
-          refreshError = null;
-          try {
-            const r = await fetch('/cache/clear', { method: 'POST' });
-            if (!r.ok) refreshError = `Кеш не сброшен (HTTP ${r.status}) - цифры могут быть до часа старыми.`;
-          } catch {
-            refreshError = 'Кеш не сброшен: сервер не ответил - цифры могут быть до часа старыми.';
-          }
-          await invalidateAll();
-          await loadToday();
-        }}
-      >
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.8 4M13.5 2v3h-3"/></svg>
-        Refresh
-      </button>
     </div>
   </header>
-  {#if refreshError}<p class="app-errors">{refreshError}</p>{/if}
-
 
   {#if data.errors.length > 0}
     <div class="app-errors">
-      <div class="app-errors-title">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="6" cy="6" r="5"/><path d="M6 3.5v3M6 8.5v.01"/></svg>
-        Errors
-      </div>
+      <div class="app-errors-title">Ошибки</div>
       <ul class="ml-4 list-disc">
-        {#each data.errors as e}
-          <li class="pii"><span class="font-medium">{e.accountEmail}</span>: {e.reason}</li>
-        {/each}
+        {#each data.errors as er}<li class="pii"><span class="font-medium">{er.accountEmail}</span>: {er.reason}</li>{/each}
       </ul>
     </div>
   {/if}
 
-  {#if visibleEntries.length === 0}
+  {#if data.entries.length === 0}
     <div class="app-empty">
-      <div class="app-empty-title">No visible sites</div>
-      <p class="app-empty-sub">Connect a Google account on <a class="text-acc hover:underline" href="/">Accounts</a>{hidden.size > 0 ? ' or unhide a site below' : ''}.</p>
+      <div class="app-empty-title">Сайтов нет</div>
+      <p class="app-empty-sub">Подключите консоль Google на странице <a class="text-acc hover:underline" href="/">Accounts</a>.</p>
     </div>
   {:else}
-    {#if favEntries.length > 0}
-      <section class="mb-5">
-        {@render sectionHead('Favorites', favEntries.length)}
-        <div class="grid {colsClass(data.cols)} gap-3">
-          {#each favEntries as e, i}
-            {@render siteCard(e, `f${i}`)}
+    <div class="overflow-x-auto rounded border border-line bg-pane">
+      <table class="app-table is-roomy">
+        <thead>
+          <tr>
+            <th class="w-8" title="Избранное — наверху таблицы"><span class="sr-only">Избранное</span>★</th>
+            <SortTh {sort} k="site" label="Сайт" />
+            <SortTh {sort} k="clicks" label="Клики" num />
+            <SortTh {sort} k="dClicks" label="± клики" num title="Изменение кликов к {cmpLabel || 'прошлому периоду'}: сколько и в процентах" />
+            <SortTh {sort} k="impr" label="Показы" num />
+            <SortTh {sort} k="dImpr" label="± показы" num title="Изменение показов к {cmpLabel || 'прошлому периоду'}" />
+            <SortTh {sort} k="ctr" label="CTR" num />
+            <SortTh {sort} k="pos" label="Позиция" num title="Средняя позиция, взвешенная по показам" />
+            <SortTh {sort} k="dPos" label="± позиция" num title="▲ — поднялся (место стало выше), ▼ — опустился; к {cmpLabel || 'прошлому периоду'}" />
+            <SortTh {sort} k="buy" label="Закупки ссылок" title="Последняя закупка ссылок на сайт из «Групп»: дата и сколько ссылок; нажмите — что изменилось после неё. «ещё N» — прошлые закупки" />
+          </tr>
+          <tr class="is-total">
+            <td></td>
+            <td>Итого · {visible.length} сайтов</td>
+            <td class="num app-num pii">{fmt(totals.clicks)}</td>
+            <td class="num app-num">{@render delta(totals.dClicks, totals.pClicks)}</td>
+            <td class="num app-num pii">{fmt(totals.impr)}</td>
+            <td class="num app-num">{@render delta(totals.dImpr, totals.pImpr)}</td>
+            <td class="num app-num pii">{totals.ctr === null ? '—' : (totals.ctr * 100).toFixed(1) + '%'}</td>
+            <td class="num app-num pii">{totals.pos === null ? '—' : totals.pos.toFixed(1)}</td>
+            <td class="num app-num">{@render posDelta(totals.dPos)}</td>
+            <td></td>
+          </tr>
+        </thead>
+        <tbody>
+          {#each rows as e (keyOf(e))}
+            {@render row(e, false)}
           {/each}
+        </tbody>
+      </table>
+    </div>
+
+    {#if hiddenRows.length}
+      <details class="mt-4">
+        <summary class="cursor-pointer text-xs text-ink-3">Скрытые сайты · {hiddenRows.length}</summary>
+        <div class="mt-2 overflow-x-auto rounded border border-line bg-pane">
+          <table class="app-table" data-nostick>
+            <tbody>
+              {#each hiddenRows as e (keyOf(e))}
+                {@render row(e, true)}
+              {/each}
+            </tbody>
+          </table>
         </div>
-      </section>
+      </details>
     {/if}
-
-    <section>
-      {@render sectionHead('All sites', restEntries.length)}
-      <div class="grid {colsClass(data.cols)} gap-3">
-        {#each restEntries as e, i}
-          {@render siteCard(e, `r${i}`)}
-        {/each}
-      </div>
-    </section>
-  {/if}
-
-  {#if visibleEntries.length > 0 && hiddenEntries.length > 0}
-    <section class="mt-5">
-      <div class="opacity-60">{@render sectionHead('Hidden', hiddenEntries.length)}</div>
-      <div class="grid {colsClass(data.cols)} gap-3 opacity-60">
-        {#each hiddenEntries as e, i}
-          {@render siteCard(e, `h${i}`, true)}
-        {/each}
-      </div>
-    </section>
   {/if}
 </main>
+
+<style>
+  .fav {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 4px;
+    color: rgb(var(--ink-4));
+  }
+  .fav:hover {
+    color: rgb(var(--ink-2));
+    background: rgb(var(--sunk));
+  }
+  .fav.is-on {
+    color: rgb(var(--warn));
+  }
+</style>
