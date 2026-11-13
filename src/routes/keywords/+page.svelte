@@ -9,12 +9,15 @@
   import GroupBar from '$lib/components/GroupBar.svelte';
   import SiteGroupBar from '$lib/components/SiteGroupBar.svelte';
   import SiteGroupCell from '$lib/components/SiteGroupCell.svelte';
+  import SiteLabel from '$lib/components/SiteLabel.svelte';
+  import { useLabels, sl } from '$lib/site-labels.svelte';
   import { TableSort } from '$lib/table-sort.svelte';
   import { loadGroupItems, siteInTarget, pastGroupsOf } from '$lib/group-items.svelte';
   import { siteHref } from '$lib/utils/site';
   import { mainLabel } from '$lib/utils/key-map';
 
   let { data } = $props();
+  $effect.pre(() => useLabels(data.labels));
   // «Язык» и «Гео» — с самих сайтов (lang страницы, «Карта ключей FUT», зона домена).
   let locale = $state<Record<string, { languages: string[]; geos: string[] }>>({});
   let localeLoading = $state(false);
@@ -83,6 +86,7 @@
     </div>
     <SiteGroupBar />
     <div class="px-3 py-2"><GroupBar /></div>
+    {#if sl.error}<p class="px-3 py-1.5 text-xs text-bad">{sl.error}</p>{/if}
     {#if data.errors.length}
       <div class="app-errors mx-3">{#each data.errors as e (e.account)}<div>{e.account}: {e.reason}</div>{/each}</div>
     {/if}
@@ -117,6 +121,7 @@
                   <span class="flex items-center gap-1">
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(k) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
                     {display(s.siteUrl)}
+                    <SiteLabel site={s.siteUrl} />
                     <a class="ml-0.5 inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(s.siteUrl)} target="_blank" rel="noopener noreferrer" title="Перейти на сайт (в новой вкладке)" aria-label="Перейти на сайт {display(s.siteUrl)}" onclick={(e) => e.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
                   </span>
                 </td>

@@ -2,6 +2,7 @@ import { foldQuery, hostKey } from '$lib/utils/fold-query';
 import { siteHostname } from '$lib/utils/url-filters';
 import type { Db } from './db';
 import { nakedQuery, nakedAnchor, nakedVariant, NAKED_LABEL, type NakedVariant } from '$lib/utils/naked';
+import { blockCompare, labelKey } from '$lib/utils/site-label';
 
 // Ключи группы: связки «страница + ключ», отобранные в Striking Distance.
 // Группа с датой в названии («28-10-26») — это закупка ссылок.
@@ -214,12 +215,18 @@ export const csvCell = (v: unknown): string => {
 export function groupItemsCsv(
   groupName: string,
   items: GroupItem[],
-  locale: Record<string, { language: string | null; geo: string }> = {}
+  locale: Record<string, { language: string | null; geo: string }> = {},
+  labels: Record<string, string> = {}
 ): string {
-  const head = ['Группа', 'Сайт', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %', 'Язык', 'Гео'];
-  const lines = items.map((i) =>
+  const head = ['Группа', 'Метка', 'Сайт', 'Тип', 'Страница', 'Анкор', 'Кол-во ссылок', 'Позиция', 'Показы', 'Клики', 'CTR %', 'Язык', 'Гео'];
+  // Как ТЗ на странице группы: по метке сайта, внутри — по стране (blockCompare).
+  const labelOf = (i: GroupItem) => labels[labelKey(i.siteUrl)] ?? null;
+  const row = (i: GroupItem) => ({ label: labelOf(i), geo: locale[i.page]?.geo ?? null, site: labelKey(i.siteUrl), page: i.page, query: i.query });
+  const sorted = [...items].sort((a, b) => blockCompare(row(a), row(b)));
+  const lines = sorted.map((i) =>
     [
       groupName,
+      labelOf(i) ?? '',
       i.siteUrl,
       i.kind === 'naked' ? NAKED_LABEL[nakedVariant(i.query)] : 'Анкор',
       i.page,

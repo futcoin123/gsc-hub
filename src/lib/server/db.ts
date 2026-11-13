@@ -421,6 +421,15 @@ CREATE TABLE IF NOT EXISTS counter_visitors (
 );
 CREATE INDEX IF NOT EXISTS counter_visitors_at ON counter_visitors(at);
 
+-- Метка сайта (проект): у всех сайтов на 13.11.2026 — «futcoin», у новых —
+-- своя (решение владелицы 13.11.2026). Видна в «Ключах сайтов», «Группах» и в
+-- ТЗ (CSV). host — домен без www.
+CREATE TABLE IF NOT EXISTS site_labels (
+  host   TEXT PRIMARY KEY,
+  label  TEXT NOT NULL,
+  set_at INTEGER NOT NULL
+);
+
 -- Раздел «Без консоли»: свои сайты, которых нет в Search Console, и закупки
 -- ссылок на них по датам. Отдельно от групп сайтов консолей (site_groups):
 -- ни в «Группы», ни в «Закупки», ни в фильтр шапки не попадают.

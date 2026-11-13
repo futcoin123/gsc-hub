@@ -12,8 +12,12 @@
   import { TableSort } from '$lib/table-sort.svelte';
   import type { OtherOwner, OtherLink } from '$lib/group-items.svelte';
   import { goto, invalidateAll } from '$app/navigation';
+  import SiteLabel from '$lib/components/SiteLabel.svelte';
+  import { useLabels, labelOf, sl } from '$lib/site-labels.svelte';
+  import { blockCompare } from '$lib/utils/site-label';
   import type { PageData, ActionData } from './$types';
   let { data, form }: { data: PageData; form: ActionData } = $props();
+  $effect.pre(() => useLabels(data.labels));
 
   const selectedId = $derived(data.selectedId);
   const group = $derived(data.groups.find((g) => g.id === selectedId) ?? null);
@@ -176,8 +180,15 @@
       tzDir = ['qty', 'impressions', 'clicks'].includes(k) ? -1 : 1;
     }
   }
+  // Без выбранной колонки ТЗ идёт блоками (просьба владелицы 13.11.2026):
+  // сначала по метке сайта (futcoin, потом другие проекты — каждый отдельно),
+  // внутри — по стране (вся Италия, потом вся Испания…), дальше сайт, страница,
+  // анкор. Сайты без метки и страны, которые ещё не определились, — в конце.
+  const geoOf = (i: (typeof data.items)[number]) => tzLocale[i.page]?.geo ?? null;
+  const asRow = (i: (typeof data.items)[number]) => ({ label: labelOf(i.siteUrl), geo: geoOf(i), site: siteHostname(i.siteUrl), page: i.page, query: i.query });
+  const blockOrder = (a: (typeof data.items)[number], b: (typeof data.items)[number]) => blockCompare(asRow(a), asRow(b));
   const tzItems = $derived.by(() => {
-    if (!tzSort) return data.items;
+    if (!tzSort) return [...data.items].sort(blockOrder);
     const k = tzSort;
     const val = (i: (typeof data.items)[number]): string | number | null =>
       k === 'site' ? siteHostname(i.siteUrl) : k === 'kind' ? i.kind : k === 'query' ? i.query : k === 'page' ? i.page : i[k];
@@ -191,6 +202,28 @@
     });
   });
   const arrow = (k: SortKey) => (tzSort === k ? (tzDir === 1 ? ' ↑' : ' ↓') : '');
+  // Заголовки блоков ТЗ: метка и страна, сколько в блоке ссылок.
+  const tzBlocks = $derived.by(() => {
+    const out = new Map<number, { label?: string; labelQty?: number; geo: string; geoQty: number }>();
+    if (tzSort) return out;
+    let lastL: string | undefined, lastG: string | undefined, lId = 0, gId = 0;
+    for (const it of tzItems) {
+      const l = labelOf(it.siteUrl) ?? 'без метки', g = geoOf(it) ?? 'страна определяется…';
+      if (l !== lastL) {
+        out.set(it.id, { label: l, labelQty: 0, geo: g, geoQty: 0 });
+        lId = gId = it.id;
+        lastL = l;
+        lastG = g;
+      } else if (g !== lastG) {
+        out.set(it.id, { geo: g, geoQty: 0 });
+        gId = it.id;
+        lastG = g;
+      }
+      out.get(lId)!.labelQty! += it.qty;
+      out.get(gId)!.geoQty += it.qty;
+    }
+    return out;
+  });
 
   // Галочки в ТЗ: отметить строки и убрать их разом.
   let tzPicked = $state<Set<number>>(new Set());
@@ -285,6 +318,7 @@
     добавляйте ключи кнопкой <b>+</b> — они собираются здесь, внизу.
   </p>
 
+  {#if sl.error}<p class="mb-2 text-xs text-bad">{sl.error}</p>{/if}
   {#if form && 'error' in form && form.error}
     <p class="mb-3 rounded border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-bad">{form.error}</p>
   {/if}
@@ -398,6 +432,7 @@
                         <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {openHosts.has(h) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
                         {h}
                       </button>
+                      <span class="mt-0.5 inline-block"><SiteLabel site={h} /></span>
                     </td>
                     <td class="pii text-xs text-ink-3">{knownByHost.get(h)?.accounts.join(', ') || 'нет ни в одной консоли'}</td>
                     {#if stats[h]}
@@ -614,9 +649,16 @@
                 <thead><tr>{#if !group.fixedAt}<th class="w-8"><input type="checkbox" checked={tzAllPicked} aria-label="Отметить все строки ТЗ" onchange={() => (tzPicked = tzAllPicked ? new Set() : new Set(data.items.map((i) => i.id)))} /></th>{/if}<th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('site')}>Сайт<SortCaret dir={tzSort === 'site' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('kind')}>Тип<SortCaret dir={tzSort === 'kind' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('page')}>Страница<SortCaret dir={tzSort === 'page' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="cursor-pointer select-none hover:text-ink" onclick={() => sortTz('query')}>Анкор<SortCaret dir={tzSort === 'query' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('qty')}>Ссылок<SortCaret dir={tzSort === 'qty' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('position')}>Pos<SortCaret dir={tzSort === 'position' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('impressions')}>Impr<SortCaret dir={tzSort === 'impressions' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th class="num cursor-pointer select-none hover:text-ink" onclick={() => sortTz('clicks')}>Clicks<SortCaret dir={tzSort === 'clicks' ? (tzDir === 1 ? 'asc' : 'desc') : ''} /></th><th title="Сколько ссылок на этот ключ взято для других ваших сайтов; ⚠ — другой сайт стоит выше">Другие сайты</th><th title="Язык страницы — как указан на сайте. Названия — как на бирже ссылок">Язык</th><th title="Страна: из «Карты ключей FUT», иначе по зоне домена, иначе Global. Названия — как на бирже ссылок">Гео</th><th></th></tr></thead>
                 <tbody>
                   {#each tzItems as it (it.id)}
+                    {@const blk = tzBlocks.get(it.id)}
+                    {#if blk?.label}
+                      <tr class="tz-label"><td colspan={group.fixedAt ? 12 : 13}>{blk.label} <span class="font-normal text-ink-3">· {blk.labelQty} ссыл.</span></td></tr>
+                    {/if}
+                    {#if blk}
+                      <tr class="tz-geo"><td colspan={group.fixedAt ? 12 : 13}>{blk.label ?? labelOf(it.siteUrl) ?? 'без метки'} · {blk.geo} <span class="text-ink-3">· {blk.geoQty} ссыл.</span></td></tr>
+                    {/if}
                     <tr class:is-selected={tzPicked.has(it.id)}>
                       {#if !group.fixedAt}<td><input type="checkbox" checked={tzPicked.has(it.id)} aria-label="Отметить строку" onchange={() => tzPick(it.id)} /></td>{/if}
-                      <td class="whitespace-nowrap text-ink-2"><span class="pii">{siteHostname(it.siteUrl)}</span></td>
+                      <td class="whitespace-nowrap text-ink-2"><span class="inline-flex items-center gap-1"><span class="pii">{siteHostname(it.siteUrl)}</span><SiteLabel site={it.siteUrl} /></span></td>
                       <td class="text-xs text-ink-3">{it.kind === 'naked' ? NAKED_LABEL[nakedVariant(it.query)] : 'Анкор'}</td>
                       <td class="max-w-md"><a class="pii break-all text-ink-3 hover:text-acc hover:underline" href={it.page} target="_blank" rel="noopener noreferrer">{it.page}</a></td>
                       <td class="font-medium"><span class="pii">{it.kind === 'naked' ? nakedAnchor(it.page, it.query) : it.query}</span></td>
@@ -667,3 +709,19 @@
     {/if}
   </div>
 </main>
+
+<style>
+  .tz-label > td {
+    padding-top: 0.6rem;
+    font-weight: 600;
+    color: rgb(var(--ink));
+    background: rgb(var(--acc) / 0.1);
+    box-shadow: inset 0 -2px 0 rgb(var(--acc) / 0.5);
+  }
+  .tz-geo > td {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: rgb(var(--ink-2));
+    background: rgb(var(--sunk));
+  }
+</style>

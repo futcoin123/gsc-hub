@@ -7,10 +7,12 @@ import { clicksForRange, normHost } from '$lib/server/button-clicks';
 import { siteHostname } from '$lib/utils/url-filters';
 import { keyMapAll } from '$lib/server/key-map';
 import { mapSummary } from '$lib/utils/key-map';
+import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
   const period = reportPeriod(db());
+  await seedSiteLabels(db());
   const { sites, errors } = await sitesForPeriod(db(), period);
   // Нажатия кнопки оплаты (переход на партнёрку) по доменам за тот же период —
   // счётчик хаба на сайтах.
@@ -41,5 +43,5 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const pages = all.get(hostOf(st.siteUrl));
     keyMap[st.siteUrl] = pages ? mapSummary(pages) : null;
   }
-  return { period, sites, errors, pay, payTotal, keyMap, keyMapSites: all.size };
+  return { period, sites, errors, pay, payTotal, keyMap, keyMapSites: all.size, labels: siteLabels(db()) };
 };

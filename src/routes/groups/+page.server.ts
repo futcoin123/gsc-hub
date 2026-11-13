@@ -18,9 +18,11 @@ import {
 import { listGroupItems, setGroupFixed, removeGroupItemById, todayGroupName, addNakedItem, setItemQtyById, groupOverlaps } from '$lib/server/group-items';
 import { siteHostname } from '$lib/utils/url-filters';
 import { getSiteViewSettings } from '$lib/server/site-view-settings';
+import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
+  await seedSiteLabels(db());
   // Все сайты всех консолей, без фильтров: выбирать в группу можно любой.
   const { sites, errors } = await listAllKnownSites(db());
   const byHost = new Map<string, { host: string; accounts: string[]; open: { siteUrl: string; accountId: string }; openRank: number; sources: { siteUrl: string; accountId: string; rank: number }[] }>();
@@ -64,7 +66,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         days: getSiteViewSettings(db(), k.open.siteUrl).days,
         sources: sources.sort((a, b) => b.rank - a.rank).map(({ rank: _x, ...src }) => src)
       })).sort((a, b) => a.host.localeCompare(b.host)),
-    siteErrors: errors.map((e) => ({ account: e.accountEmail, reason: e.reason }))
+    siteErrors: errors.map((e) => ({ account: e.accountEmail, reason: e.reason })),
+    labels: siteLabels(db())
   };
 };
 

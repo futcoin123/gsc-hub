@@ -8,6 +8,15 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Site labels.** Every site can carry a project label: all sites in the
+  panel on 13 Nov 2026 got `futcoin`, new sites come without one. The label
+  shows in site keys (next to the site), in groups (group sites and the brief)
+  and goes into the CSV as a "Метка" column. Click to change, empty to remove;
+  existing labels are suggested.
+- **Group brief in blocks.** With no column picked, the brief is ordered by
+  site label (each project its own block), then by country, then site, page
+  and anchor, with a header and link count per block. The CSV uses the same
+  order.
 - **Unified counter.** One counter for every site instead of hand-written ones:
   the panel gives a site its page code (appended to the site's own JS) and
   `gsc-counter.js` for Pages Functions (Buttons → "Единый счётчик", or
