@@ -12,7 +12,6 @@
   let { data, form } = $props();
   const KIND: Record<string, string> = { view: 'Просмотр', submit: 'Перешёл к оплате', button: 'Кнопка', out: 'Ссылка на другой сайт', link: 'Обычная ссылка' };
   let copied = $state<string>('');
-  let showCode = $state(false);
   async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -244,22 +243,16 @@
 <div class="desk is-sticky-host">
   <section class="pane">
     <details class="border-b border-line" open={Object.keys(data.lastSeen).length === 0}>
-      <summary class="cursor-pointer px-3 py-2 text-sm font-semibold">Как подключить счётчик к сайту (Cloudflare)</summary>
+      <summary class="cursor-pointer px-3 py-2 text-sm font-semibold">Ключ счётчика</summary>
       <div class="space-y-2 px-3 pb-3 text-sm text-ink-2">
-        <p>Считает Cloudflare Worker: он подключает к страницам маленький файл счётчика <b>с адреса самого сайта</b> — защита сайта (CSP) его пропускает, в шаблоне ничего не меняется, адреса панели на сайте нет. <b>У каждого сайта свой файл</b>: свой адрес, свои имена внутри и свои названия полей, так что файлы разных сайтов не совпадают и по ним сайты не связать. <b>Код Worker ставится один раз</b>: файл счётчика он берёт из панели и раз в 10 минут обновляет сам, поэтому при обновлениях счётчика на сайтах ничего менять не нужно. Если панель не отвечает, сайт работает как обычно, только без подсчёта. Переход к оплате, который сразу уводит на кассу, Worker засчитывает сам.</p>
-        <ol class="ml-5 list-decimal space-y-1">
-          <li>Cloudflare → <b>Workers &amp; Pages</b> → <b>Create</b> → <b>Create Worker</b> (Hello World) → назовите, например, <code>site-stats</code> → <b>Deploy</b>.</li>
-          <li><b>Edit code</b> → удалите всё, вставьте код ниже («Копировать код Worker») → <b>Deploy</b>.</li>
-          <li>Worker → <b>Settings</b> → <b>Variables and Secrets</b> → <b>Add</b> → тип <b>Secret</b>, имя <code>COUNTER_KEY</code>, значение — ключ («Копировать ключ») → <b>Deploy</b>. Ключа в коде нет — только здесь.</li>
-          <li>Worker → <b>Settings</b> → <b>Domains &amp; Routes</b> → <b>Add</b> → <b>Route</b>: зона — ваш сайт, маршрут <code>fccoins.fr/*</code> (и <code>www.fccoins.fr/*</code>, если сайт открывается с www).</li>
-          <li>Новые сайты — только шаг 4: маршрут в тот же Worker. Сайт должен быть в подключённой консоли Search Console, иначе панель его не примет.</li>
-          <li>Проверка: откройте сайт в обычном браузере, нажмите кнопку заказа — через минуту обновите эту страницу.</li>
-        </ol>
-        <p class="text-xs text-ink-3">Старый подсчёт (другой Worker, Zaraz, правило) уберите, чтобы не считалось дважды. Новый ключ не ломает сайты: старые ключи принимаются, пока вы их не отзовёте. Отзывайте только утёкший ключ — и только после того, как поставили сайтам текущий. Бесплатный тариф Cloudflare — 100 000 запросов к Worker в день на аккаунт.</p>
+        <p>
+          Счётчик на сайт ставится <b>единым</b> — блок «Единый счётчик» ниже: файлы для сайта и «Проверить сайт» (правило сети с
+          13.11.2026). Cloudflare Worker и самодельные счётчики больше не ставить. Здесь — ключ, которым сайты подписывают события: один
+          на все сайты, кладётся секретом <code>COUNTER_KEY</code> в репозиторий сайта на GitHub. Новый ключ не ломает сайты: старые
+          принимаются, пока их не отозвать.
+        </p>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-pri btn-sm" onclick={() => copy(data.workerCode, 'code')}>{copied === 'code' ? 'Скопировано ✓' : 'Копировать код Worker'}</button>
-          <button type="button" class="btn btn-sec btn-sm" onclick={() => copy(data.counterKey, 'key')}>{copied === 'key' ? 'Скопировано ✓' : 'Копировать ключ'}</button>
-          <button type="button" class="btn btn-ghost btn-sm" onclick={() => (showCode = !showCode)}>{showCode ? 'Скрыть код' : 'Показать код'}</button>
+          <button type="button" class="btn btn-pri btn-sm" onclick={() => copy(data.counterKey, 'key')}>{copied === 'key' ? 'Скопировано ✓' : 'Копировать ключ'}</button>
           <form method="POST" action="?/rotateKey" use:enhance={({ cancel }) => { if (!confirm('Выдать новый ключ? Старые ключи продолжат работать, пока вы их не отзовёте — сайты не сломаются.')) cancel(); }}>
             <button class="btn btn-ghost btn-sm">Новый ключ</button>
           </form>
@@ -520,7 +513,7 @@
                     {:else if sendsSources(s.host)}
                       <p class="mb-3 text-xs text-ink-3">За этот период входов нет.</p>
                     {:else}
-                      <p class="mb-3 text-xs text-ink-3">Код счётчика на этом сайте ещё не передаёт источник. Обновите код Worker'а: «Как подключить счётчик к сайту» → «Копировать код Worker» → в Cloudflare Edit code → заменить всё → Deploy (ключ и маршруты не трогать).</p>
+                      <p class="mb-3 text-xs text-ink-3">Счётчик этого сайта не передаёт источник. Поставьте на сайт единый счётчик — блок «Единый счётчик» вверху страницы.</p>
                     {/if}
                     {#if pages.length}
                       <div class="mb-1 text-xs font-semibold text-ink-2">Страницы</div>

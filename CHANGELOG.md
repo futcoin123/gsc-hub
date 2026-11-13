@@ -44,6 +44,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Buttons: the "connect the counter (Cloudflare)" block is now "Ключ счётчика".**
+  The Cloudflare Worker instructions and code are gone — under the network rule
+  of 13.11.2026 sites get only the unified counter ("Единый счётчик"). Copy
+  key, new key and the key table stay.
 - **Counter: events with a valid key are accepted from sites not yet in Search
   Console.** Only the owner's sites have the key; such events used to be dropped,
   leaving new sites at zero. Counter check: a site nobody has visited since the
