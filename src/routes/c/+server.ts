@@ -80,7 +80,8 @@ export const POST: RequestHandler = async ({ request }) => {
       kind = 'test';
       if (keyOk) log('ok');
       else if (rawHost && (await isKnownHost(rawHost))) log('bad-key');
-      return EMPTY();
+      // Сайт (единый счётчик v2) передаёт ответ дальше в x-counter-ping.
+      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'x-gsc-test': keyOk ? 'ok' : 'bad-key' } });
     }
     // Новый Worker присылает событие страницы как есть — переводим его ключом сайта.
     const parsed = parseWorkerEvent(workerEventInput(raw, key));

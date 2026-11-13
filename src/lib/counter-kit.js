@@ -11,13 +11,17 @@
 //      в панель с ключом COUNTER_KEY; сам считает переход к оплате (ответ 3xx
 //      на другой сайт после нажатия на этом); код посетителя — HMAC ключа от
 //      даты и IP: один и тот же весь день на всех серверах Cloudflare, IP из
-//      функции не уходит. Проверка связи из панели ({"gsc_ping":1}) доходит
-//      до панели и в статистику не попадает.
+//      функции не уходит. Проверка связи ({"gsc_ping":1} на адрес событий)
+//      доходит до панели, ответ панели — в заголовке x-counter-ping (ok,
+//      bad-key…); в статистику не попадает.
 // Обычный JS без зависимостей: его берут и панель («Кнопки» → «Единый
 // счётчик»), и команда scripts/counter-kit.mjs для сессий сайтов.
 import { createHash } from 'node:crypto';
 
-export const KIT_VERSION = '1';
+export const KIT_VERSION = '2';
+// Имена в коде выводятся из домена и этой метки — от версии счётчика не зависят:
+// новая версия меняет устройство, а адрес и имена у сайта остаются прежними.
+const NAMES_SEED = '1';
 
 const HEAD = String.raw`(function(){if(window.@G@)return;window.@G@=1;var @P@=%EV%;
 function @send@(@o@){@o@.#p#=location.pathname;var @b@=JSON.stringify(@o@);try{if(navigator.sendBeacon&&navigator.sendBeacon(@P@,new Blob([@b@],{type:'application/json'})))return}catch(@e@){}try{fetch(@P@,{method:'POST',body:@b@,keepalive:true,credentials:'omit',headers:{'Content-Type':'application/json'}})}catch(@e@){}}
@@ -89,14 +93,14 @@ function rng(x) {
  * @property {string} version
  */
 
-/** Адрес событий: путь вида /слово/ (буквы, цифры, дефис), не /c и не служебный.
+/** Адрес событий: путь из одного-двух слов (/segnale/, /api/v/) — буквы, цифры, дефис; не служебный Cloudflare.
  * @param {string | null | undefined} v
  * @returns {string | null} */
 export function cleanEventsPath(v) {
   const s = String(v ?? '').trim();
   if (!s) return null;
   const p = (s.startsWith('/') ? s : '/' + s).replace(/\/?$/, '/');
-  return /^\/[a-z0-9][a-z0-9-]{1,30}\/$/i.test(p) && !/^\/(c|api|cdn-cgi|_)/i.test(p) ? p.toLowerCase() : null;
+  return /^\/[a-z0-9][a-z0-9-]{0,30}(\/[a-z0-9][a-z0-9-]{0,30})?\/$/i.test(p) && !/^\/(c|cdn-cgi)\//i.test(p) ? p.toLowerCase() : null;
 }
 
 /**
@@ -109,7 +113,7 @@ export function cleanEventsPath(v) {
  */
 export function counterKit(host, panelOrigin, eventsPath) {
   const h = host.toLowerCase().replace(/^www\./, '');
-  const seed = createHash('sha256').update(`gsc-hub-kit\n${KIT_VERSION}\n${h}`).digest();
+  const seed = createHash('sha256').update(`gsc-hub-kit\n${NAMES_SEED}\n${h}`).digest();
   const rnd = rng(new Uint8Array(seed.subarray(0, 16)));
   const pathRnd = rng(new Uint8Array(seed.subarray(16, 32)));
   const LOW = 'abcdefghijklmnopqrstuvwxyz', LET = LOW + LOW.toUpperCase(), DIG = '0123456789';
@@ -227,10 +231,11 @@ let lastPing = 0;
 
 async function receive(ctx, url) {
   const { request, env } = ctx;
-  const reply = () => new Response(null, {
-    status: 204,
-    headers: { 'Cache-Control': 'no-store, no-transform', 'X-Robots-Tag': 'noindex', 'x-counter': env && env.COUNTER_KEY ? 'on' : 'off', 'x-counter-kit': VERSION },
-  });
+  const reply = (ping) => {
+    const headers = { 'Cache-Control': 'no-store, no-transform', 'X-Robots-Tag': 'noindex', 'x-counter': env && env.COUNTER_KEY ? 'on' : 'off', 'x-counter-kit': VERSION };
+    if (ping) headers['x-counter-ping'] = ping;
+    return new Response(null, { status: 204, headers });
+  };
   if (request.method !== 'POST') return reply();
   let o = null;
   try {
@@ -240,13 +245,26 @@ async function receive(ctx, url) {
     return reply();
   }
   if (!o || typeof o !== 'object' || Array.isArray(o)) return reply();
-  // Проверка связи из панели: доходит ли событие до панели с ключом этого сайта.
+  // Проверка связи: событие «test» идёт в панель с ключом этого сайта, ответ
+  // панели — в заголовке x-counter-ping: ok, bad-key (ключ сайта не подходит),
+  // no-key (нет секрета COUNTER_KEY), wait (только что проверяли), panel-… .
+  // В статистику не попадает. Проверить может и панель, и сессия сайта (curl).
   if (o.gsc_ping === 1) {
-    if (Date.now() - lastPing > 10000) {
-      lastPing = Date.now();
-      send(ctx, { k: 'test', p: '/' }, 'ping');
+    const key = env && env.COUNTER_KEY;
+    if (!key) return reply('no-key');
+    if (Date.now() - lastPing < 5000) return reply('wait');
+    lastPing = Date.now();
+    try {
+      const r = await fetch(PANEL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Counter-Key': key, 'X-Client-IP': 'ping', 'X-Client-UA': LABEL },
+        body: JSON.stringify({ h: SITE, e: JSON.stringify({ k: 'test', p: '/' }) }),
+        signal: AbortSignal.timeout(8000),
+      });
+      return reply(r.headers.get('x-gsc-test') || 'panel-' + r.status);
+    } catch {
+      return reply('panel-unreachable');
     }
-    return reply();
   }
   const same = (request.headers.get('sec-fetch-site') || 'same-origin') === 'same-origin' && (!request.headers.get('origin') || request.headers.get('origin') === url.origin);
   if (!same || !person(request, url)) return reply();

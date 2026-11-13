@@ -31,11 +31,16 @@ export const POST: RequestHandler = async ({ request, url, locals }) => {
   const counter = res.headers.get('x-counter');
   if (!kit) return json({ step: 'no-kit' satisfies PingStep, target, status: res.status, counter });
   if (counter !== 'on') return json({ step: 'no-key' satisfies PingStep, target, kit });
+  let pong: string | null = null;
   try {
-    await fetch(target, { method: 'POST', headers: { 'user-agent': UA, 'content-type': 'application/json' }, body: '{"gsc_ping":1}', signal: AbortSignal.timeout(8000) });
+    const r = await fetch(target, { method: 'POST', headers: { 'user-agent': UA, 'content-type': 'application/json' }, body: '{"gsc_ping":1}', signal: AbortSignal.timeout(12000) });
+    pong = r.headers.get('x-counter-ping');
   } catch (e) {
     return json({ step: 'unreachable' satisfies PingStep, target, detail: (e as Error).message });
   }
+  // Счётчик v2 сам говорит, что ответила панель.
+  if (pong === 'ok' || pong === 'bad-key' || pong === 'no-key') return json({ step: pong satisfies PingStep, target, kit });
+  if (pong && pong !== 'wait') return json({ step: 'no-arrival' satisfies PingStep, target, kit, detail: pong });
   const find = db().prepare("SELECT outcome FROM counter_log WHERE host = ? AND kind = 'test' AND last_at >= ? ORDER BY last_at DESC LIMIT 1");
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 500));

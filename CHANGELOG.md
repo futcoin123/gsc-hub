@@ -44,6 +44,12 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Unified counter v2: the link check result is visible from outside.** On
+  `{"gsc_ping":1}` the site waits for the panel and answers with an
+  `x-counter-ping` header: `ok`, `bad-key` (the site key is wrong), `no-key`
+  (no secret). Site sessions check the chain themselves, without a panel login.
+  The event path may have two words (`/api/v/`), so older sites keep theirs.
+  Code names no longer depend on the version: futcoin.it keeps its own.
 - **Buttons: the "connect the counter (Cloudflare)" block is now "Ключ счётчика".**
   The Cloudflare Worker instructions and code are gone — under the network rule
   of 13.11.2026 sites get only the unified counter ("Единый счётчик"). Copy

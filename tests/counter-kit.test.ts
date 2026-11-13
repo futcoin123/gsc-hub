@@ -108,10 +108,17 @@ describe('единый счётчик: код и файлы', () => {
     expect(a.module).toContain('const SITE = "futcoin.it"');
     expect(Object.values(a.fields).sort()).toEqual(['b', 'c', 'd', 'k', 'l', 'p', 'r', 't']);
   });
-  it('адрес событий — одно слово сайта', () => {
+  it('адрес событий — одно-два слова сайта (у старых сайтов остаётся свой)', () => {
     expect(cleanEventsPath('segnale')).toBe('/segnale/');
     expect(cleanEventsPath('/Puls')).toBe('/puls/');
-    for (const bad of ['/c/', '/api/x', '/a b/', '/../', '/cdn-cgi/x', '']) expect(cleanEventsPath(bad), bad).toBeNull();
+    expect(cleanEventsPath('/api/v')).toBe('/api/v/');
+    for (const bad of ['/c/', '/c/x', '/a b/', '/../', '/cdn-cgi/x', '/a/b/c/', '']) expect(cleanEventsPath(bad), bad).toBeNull();
+  });
+
+  it('новая версия не меняет имена у сайта (futcoin.it на версии 1 работает с этими же)', () => {
+    const k = counterKit(SITE, 'https://panel.example', '/segnale/');
+    expect(k.fields).toEqual({ dz: 'p', ju: 'k', k: 'r', t: 'd', i: 'l', dw: 't', od: 'c', o: 'b' });
+    expect(k.kinds).toEqual({ yg: 'view', kra: 'time', nl: 'link', b: 'out' });
   });
 });
 
@@ -186,12 +193,18 @@ describe('единый счётчик: страница → сайт → пан�
     expect(panelCalls).toEqual([]);
   });
 
-  it('проверка связи доходит до панели и в статистику не попадает', async () => {
+  it('проверка связи: ответ панели виден снаружи, в статистику не попадает', async () => {
     const kit = counterKit(SITE, 'https://panel.example', '/segnale/');
-    const mod = await loadModule(kit.module);
-    await site(mod, kit.events, { method: 'POST', body: '{"gsc_ping":1}', headers: { 'user-agent': 'Mozilla/5.0 (compatible; GSCHubCheck/1)' } });
+    const ping = { method: 'POST', body: '{"gsc_ping":1}', headers: { 'user-agent': 'Mozilla/5.0 (compatible; GSCHubCheck/1)' } };
+    const ok = await site(await loadModule(kit.module), kit.events, ping);
+    expect(ok.headers.get('x-counter-ping')).toBe('ok');
     expect(counterLogSince(testDb, '2000-01-01')[SITE]).toEqual([expect.objectContaining({ kind: 'test', outcome: 'ok', n: 1 })]);
     expect(clicksForRange(testDb, today(), today())).toEqual([]);
+    // старый ключ в секрете сайта — так было у futcoin.it
+    const bad = await site(await loadModule(kit.module), kit.events, { ...ping, env: { COUNTER_KEY: 'old-revoked-key' } });
+    expect(bad.headers.get('x-counter-ping')).toBe('bad-key');
+    const none = await site(await loadModule(kit.module), kit.events, { ...ping, env: {} });
+    expect(none.headers.get('x-counter-ping')).toBe('no-key');
   });
 
   it('сайт не в Search Console, но ключ верный — событие принято', async () => {
