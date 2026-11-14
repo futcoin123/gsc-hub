@@ -37,6 +37,30 @@
   const split = $derived(checkoutSplit(checkouts, new Set(leads.keys())));
   // «Карта ключей FUT»: главные и второстепенные ключи сайта; null — сайта в карте нет.
   let keyMap = $state<MapPage[] | null>(null);
+  // Страницы целиком: показы и клики страницы, сколько из них по видимым ключам,
+  // сколько Google скрыл (редкие запросы). null — Google страницы не отдал.
+  type PageRow = { page: string; clicks: number; impressions: number; position: number };
+  let pages = $state<PageRow[] | null>(null);
+  let pagesAll = $state(false);
+  const pageStats = $derived.by(() => {
+    if (!pages) return [];
+    const byPage = new Map<string, { clicks: number; impressions: number; keys: number }>();
+    for (const r of rows) {
+      const k = byPage.get(r.page) ?? { clicks: 0, impressions: 0, keys: 0 };
+      k.clicks += r.clicks;
+      k.impressions += r.impressions;
+      k.keys++;
+      byPage.set(r.page, k);
+    }
+    return pages
+      .filter((p) => p.clicks || p.impressions)
+      .map((p) => {
+        const k = byPage.get(p.page) ?? { clicks: 0, impressions: 0, keys: 0 };
+        return { ...p, keyClicks: k.clicks, keys: k.keys, hiddenClicks: Math.max(0, p.clicks - k.clicks), hiddenImpr: Math.max(0, p.impressions - k.impressions) };
+      })
+      .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions);
+  });
+  const pagesClicks = $derived(pageStats.reduce((a, p) => a + p.clicks, 0));
   let onlyMap = $state(false);
   const marker = $derived(keyMap ? keyMarker(keyMap) : null);
   const markOf = (r: Row) => marker?.(r.query) ?? null;
@@ -117,6 +141,8 @@
   let other = $state<Record<string, { owners: OtherOwner[]; links: OtherLink[] }>>({});
   let otherLoading = $state(false);
   let search = $state('');
+  // Ключи одной страницы — по клику на неё в блоке «Страницы» (точное совпадение адреса).
+  let pageOnly = $state<string | null>(null);
   let kind = $state<'all' | 'conv' | 'brand' | 'any'>('all');
   let limit = $state(300);
   const vols = new Volumes();
@@ -134,6 +160,7 @@
       rows = j.rows ?? [];
       checkouts = j.checkouts ?? {};
       keyMap = j.keyMap ?? null;
+      pages = j.pages ?? null;
     } catch (e) {
       err = (e as Error).message;
       return;
@@ -160,6 +187,7 @@
   const filtered = $derived.by(() => {
     const s = search.trim().toLowerCase();
     return rows.filter((r) => {
+      if (pageOnly && r.page !== pageOnly) return false;
       if (s && !r.query.toLowerCase().includes(s) && !r.page.toLowerCase().includes(s)) return false;
       if (onlyMap && !markOf(r)) return false;
       if (kind === 'all') return true;
@@ -218,6 +246,7 @@
 <div class="py-2">
   <div class="mb-2 flex flex-wrap items-center gap-2 text-xs">
     <input class="input h-7 w-64 text-xs" placeholder="Ключ или страница содержит…" bind:value={search} aria-label="Поиск по ключам" />
+    {#if pageOnly}<button type="button" class="badge badge-acc pii max-w-[22rem] truncate" title="Показаны только ключи этой страницы. Нажмите, чтобы показать все" onclick={() => (pageOnly = null)}>страница: {pathOf(pageOnly)} ×</button>{/if}
     <div class="app-segmented" role="group" aria-label="Тип ключа">
       {#each [['all', 'все'], ['any', 'зелёные + жёлтые'], ['conv', 'конверсия'], ['brand', 'бренд / комм.']] as [v, label] (v)}
         <button type="button" class:is-active={kind === v} onclick={() => (kind = v as typeof kind)}>{label}</button>
@@ -248,6 +277,35 @@
   {/if}
   {#if vols.error}<p class="mb-1 text-xs text-bad">{vols.error}{#if !vols.configured} — <a class="text-acc underline" href="/settings/integrations">раздел «Сервисы»</a>{/if}</p>{/if}
   {#if vols.note}<p class="mb-1 text-xs text-emerald-700">{vols.note}</p>{/if}
+
+  {#if !loading && !err && pageStats.length}
+    {@const pageRows = pagesAll ? pageStats : pageStats.slice(0, 8)}
+    <!-- Клики по страницам — рядом с ключами, без переключения: у страницы бывают
+         клики по запросам, которые Google не показывает. Открыто, если клики есть. -->
+    <details class="mb-2 rounded border border-line bg-pane" open={pagesClicks > 0}>
+      <summary class="cursor-pointer select-none px-2 py-1.5 text-xs font-semibold text-ink-2 hover:bg-sunk">
+        Страницы ({pageStats.length}) · кликов {fmt(pagesClicks)}
+        <span class="font-normal text-ink-3">— клики и показы страницы целиком; «по ключам» — сколько из них видно в ключах ниже, «скрыто Google» — по редким запросам, которые Google не показывает. Нажмите на страницу — её ключи.</span>
+      </summary>
+      <table class="app-table border-t border-line" data-nostick>
+        <thead><tr><th>Страница</th><th class="num">Показы</th><th class="num">Клики</th><th class="num" title="Клики по ключам, которые Google показывает (строки таблицы ниже)">по ключам</th><th class="num" title="Клики по запросам, которые Google скрывает: страница их получила, но ключа не видно">скрыто Google</th><th class="num">Pos</th><th class="num" title="Сколько ключей этой страницы в таблице ниже">ключей</th></tr></thead>
+        <tbody>
+          {#each pageRows as p (p.page)}
+            <tr class={p.hiddenClicks ? 'bg-warn-t/40' : ''}>
+              <td class="max-w-[28rem]"><button type="button" class="pii break-all text-left text-acc hover:underline" title="Показать в таблице ниже только ключи этой страницы" onclick={() => (pageOnly = pageOnly === p.page ? null : p.page)}>{p.page}</button>{#if pageOnly === p.page}<span class="ml-1 text-[10px] text-ink-3">· показаны ниже</span>{/if}</td>
+              <td class="num app-num">{fmt(p.impressions)}</td>
+              <td class="num app-num {p.clicks ? 'font-semibold' : 'text-ink-4'}">{fmt(p.clicks)}</td>
+              <td class="num app-num {p.keyClicks ? '' : 'text-ink-4'}">{fmt(p.keyClicks)}</td>
+              <td class="num app-num {p.hiddenClicks ? 'font-semibold text-warn' : 'text-ink-4'}">{fmt(p.hiddenClicks)}</td>
+              <td class="num app-num">{p.position ? p.position.toFixed(1) : '—'}</td>
+              <td class="num app-num text-ink-3">{p.keys}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      {#if pageStats.length > 8}<button type="button" class="btn btn-ghost btn-sm m-1 text-xs" onclick={() => (pagesAll = !pagesAll)}>{pagesAll ? 'Свернуть' : `Все страницы (${pageStats.length})`}</button>{/if}
+    </details>
+  {/if}
 
   {#if !loading && !err && nakedRows.length}
     {@const nakedInGroup = nakedRows.filter((n) => inActive(n.page, nakedQuery(n.variant))).length}
