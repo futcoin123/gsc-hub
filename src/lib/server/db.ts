@@ -336,6 +336,14 @@ CREATE TABLE IF NOT EXISTS key_map_topics (
   keys    TEXT NOT NULL
 );
 
+-- Для строки сайта в «Ключах сайтов»: главный и 1–3 второстепенных ключа с
+-- частотностью Ahrefs, как их отобрала карта. Заменяются целиком при каждой
+-- новой карте.
+CREATE TABLE IF NOT EXISTS key_map_headline (
+  host TEXT PRIMARY KEY,
+  keys TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS key_map_state (
   id          INTEGER PRIMARY KEY CHECK (id = 1),
   private_key TEXT NOT NULL,

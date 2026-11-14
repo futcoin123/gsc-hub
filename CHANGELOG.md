@@ -75,11 +75,13 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
-- **Site keys: map keywords only when they have impressions.** The site row
-  and the expanded table list the FUT map's main and secondary keywords only
-  when they had impressions in the period, with the count (keyword plus
-  variants); the rest show as "без показов: N" with the list on hover. The
-  key map column sorts by those impressions.
+- **Site keys: the "Key map" column shows the main keyword and 1–3 secondary
+  keywords as the map assigned them, with the Ahrefs volume in brackets.**
+  Secondary keywords are only those with an Ahrefs volume, at most three: the
+  early pages of the sites were built without keywords and no longer show up.
+  A site with language folders gets its own main and secondary keywords per
+  country. Replaces "+N secondary" and the "not in Google for the period" line
+  in the expanded table.
 - **"My other sites" covers 7 days instead of 28.** A site could have ranked
   and dropped out; the other sites' position and impressions now come from
   the last 7 days.

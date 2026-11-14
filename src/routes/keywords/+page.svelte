@@ -14,7 +14,19 @@
   import { TableSort } from '$lib/table-sort.svelte';
   import { loadGroupItems, siteInTarget, pastGroupsOf } from '$lib/group-items.svelte';
   import { siteHref } from '$lib/utils/site';
-  import { mainLabel } from '$lib/utils/key-map';
+
+  // Ключи карты по странам: у сайта с языковыми папками — главный и свои
+  // второстепенные у каждой страны. В скобках — частотность Ahrefs по карте.
+  type KM = NonNullable<(typeof data.keyMap)[string]>;
+  function byCountry(km: KM) {
+    const out = new Map<string, { main: KM['main']; secondary: KM['secondary'] }>();
+    const at = (cc: string) => out.get(cc) ?? (out.set(cc, { main: [], secondary: [] }), out.get(cc)!);
+    for (const m of km.main) at(m.cc).main.push(m);
+    for (const s2 of km.secondary) at(s2.cc).secondary.push(s2);
+    return [...out.entries()].map(([cc, v]) => ({ cc, ...v }));
+  }
+  const ahrefs = (v: number | null) => (v == null ? '—' : v.toLocaleString('ru-RU'));
+  const ahrefsTitle = (v: number | null) => (v == null ? 'в Ahrefs данных нет' : `Ahrefs: ${v.toLocaleString('ru-RU')} запросов в месяц`);
 
   let { data } = $props();
   $effect.pre(() => useLabels(data.labels));
@@ -47,7 +59,7 @@
   const display = (u: string) => u.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
   type K = 'site' | 'account' | 'lang' | 'geo' | 'map' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay' | 'group';
-  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay', 'group', 'map']);
+  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay', 'group']);
   const sites = $derived(
     sort.apply(
       data.sites.filter((s) => (!search.trim() || s.siteUrl.toLowerCase().includes(search.trim().toLowerCase())) && (!hideEmpty || s.impressions > 0)),
@@ -56,7 +68,7 @@
         : k === 'account' ? (s.accountLabel ?? s.accountEmail)
         : k === 'lang' ? (locale[s.siteUrl]?.languages.join(', ') || null)
         : k === 'geo' ? (locale[s.siteUrl]?.geos.join(', ') || null)
-        : k === 'map' ? (data.keyMap[s.siteUrl] ? [...data.keyMap[s.siteUrl]!.main, ...data.keyMap[s.siteUrl]!.secondary].reduce((a, x) => a + x.impressions, 0) : null)
+        : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0]?.key ?? null)
         : k === 'pay' ? (data.pay[s.siteUrl] ?? 0)
         : k === 'group' ? (siteInTarget(s.siteUrl) ? 'z' : (pastGroupsOf(s.siteUrl)[0]?.date ?? null))
         : s[k]
@@ -126,15 +138,16 @@
                   </span>
                 </td>
                 <td class="pii text-xs text-ink-3">{s.accountLabel ?? s.accountEmail}</td>
-                <td class="max-w-[16rem] text-xs">
+                <td class="max-w-[22rem] text-xs">
                   {#if km}
-                    <!-- Только ключи карты с показами за период, с числом показов (просьба владелицы 14.11.2026). -->
-                    <span class="flex flex-wrap items-center gap-1">
-                      {#each km.main as m (m.key + m.cc)}<span class="badge badge-ok" title="Главный ключ по «Карте ключей FUT» · {m.url} · {m.geo} · показов за период: {m.impressions}">{mainLabel(m, km.main.length > 1)} <span class="app-num opacity-70">{fmt(m.impressions)}</span></span>{/each}
-                      {#each km.secondary.slice(0, 3) as s2 (s2.key + s2.cc)}<span class="badge badge-muted" title="Второстепенный ключ по «Карте ключей FUT» · {s2.url} · показов за период: {s2.impressions}">{s2.key} <span class="app-num opacity-70">{fmt(s2.impressions)}</span></span>{/each}
-                      {#if km.secondary.length > 3}<span class="text-ink-3" title={km.secondary.slice(3).map((x) => `${x.key} — ${x.impressions}`).join(', ')}>+{km.secondary.length - 3}</span>{/if}
-                      {#if !km.main.length && !km.secondary.length}<span class="text-ink-4">по ключам карты показов нет</span>{/if}
-                      {#if km.quiet.length}<span class="text-ink-4" title="Ключи карты без показов за период — их не продвигаем: {km.quiet.map((x) => `${x.key}${x.role === 'main' ? ' (главный)' : ''}`).join(', ')}">· без показов {km.quiet.length}</span>{/if}
+                    <span class="flex flex-col gap-0.5">
+                      {#each byCountry(km) as g (g.cc)}
+                        <span class="flex flex-wrap items-center gap-1">
+                          {#if km.main.length > 1}<span class="app-num w-6 text-[10px] text-ink-4" title={g.main[0]?.geo ?? g.secondary[0]?.geo}>{g.cc}</span>{/if}
+                          {#each g.main as m (m.key + m.url)}<span class="badge badge-ok" title="Главный ключ по «Карте ключей FUT» · {m.url} · {m.geo} · {ahrefsTitle(m.ahrefs)}">{m.key} ({ahrefs(m.ahrefs)})</span>{/each}
+                          {#each g.secondary as s2 (s2.key + s2.url)}<span class="badge badge-muted" title="Второстепенный ключ по «Карте ключей FUT» · {s2.url} · {s2.geo} · {ahrefsTitle(s2.ahrefs)}">{s2.key} ({ahrefs(s2.ahrefs)})</span>{/each}
+                        </span>
+                      {/each}
                     </span>
                   {:else}
                     <span class="text-ink-4" title="Сайта пока нет в «Карте ключей FUT». Хаб ищет его в карте раз в 3 дня — когда появится, ключи отметятся сами">нет в карте</span>

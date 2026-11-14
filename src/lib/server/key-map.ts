@@ -12,7 +12,7 @@
 import { createDecipheriv, createHash, generateKeyPairSync, privateDecrypt, constants } from 'node:crypto';
 import type { Db } from './db';
 import bundled from '$lib/key-map.enc.json';
-import type { MapPage } from '$lib/utils/key-map';
+import type { MapKey, MapPage } from '$lib/utils/key-map';
 
 export interface EncryptedMap {
   v: number;
@@ -28,6 +28,8 @@ interface PlainMap {
   hosts: Record<string, MapPage[]>;
   /** Ключи темы по стране карты (IT, ES…), от частых к редким. */
   topics?: Record<string, string[]>;
+  /** Главный и 1–3 второстепенных ключа сайта с частотностью Ahrefs — для строки сайта. */
+  headline?: Record<string, MapKey[]>;
 }
 interface State {
   private_key: string;
@@ -100,6 +102,13 @@ export function importKeyMap(db: Db, enc: EncryptedMap): number | null {
       const put = db.prepare('INSERT INTO key_map_topics (country, keys) VALUES (?, ?)');
       for (const [c, keys] of Object.entries(map!.topics)) if (Array.isArray(keys)) put.run(c, JSON.stringify(keys.filter((k) => typeof k === 'string')));
     }
+    // Главный и второстепенные для строки сайта — тоже из каждой новой карты
+    // целиком: это выбор карты для показа, а не ключи сайта в хабе.
+    if (map!.headline && typeof map!.headline === 'object') {
+      db.prepare('DELETE FROM key_map_headline').run();
+      const put = db.prepare('INSERT INTO key_map_headline (host, keys) VALUES (?, ?)');
+      for (const [host, keys] of Object.entries(map!.headline)) if (Array.isArray(keys) && keys.length) put.run(normHost(host), JSON.stringify(keys));
+    }
     db.prepare('UPDATE key_map_state SET map_hash = ?, map_updated = ?, imported_at = ? WHERE id = 1').run(enc.hash ?? null, map!.mapUpdated ?? null, now);
   })();
   return added;
@@ -132,4 +141,11 @@ export function keyMapTopics(db: Db): Record<string, string[]> {
   syncKeyMap(db);
   const rows = db.prepare('SELECT country, keys FROM key_map_topics').all() as { country: string; keys: string }[];
   return Object.fromEntries(rows.map((r) => [r.country, JSON.parse(r.keys) as string[]]));
+}
+
+/** Строка сайта: host → главный и 1–3 второстепенных ключа с частотностью Ahrefs. */
+export function keyMapHeadline(db: Db): Map<string, MapKey[]> {
+  syncKeyMap(db);
+  const rows = db.prepare('SELECT host, keys FROM key_map_headline').all() as { host: string; keys: string }[];
+  return new Map(rows.map((r) => [r.host, JSON.parse(r.keys) as MapKey[]]));
 }

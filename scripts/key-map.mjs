@@ -7,7 +7,9 @@
 // Из карты берутся только её собственные пометки: у страниц сайтов «основной»
 // (главный ключ сайта) и «второстепенный» — вид «Сайты» карты; плюс страницы
 // из плана, которые уже внесены на сайт. К каждому ключу — его варианты из
-// группы карты (Google считает их тем же запросом).
+// группы карты (Google считает их тем же запросом). Отдельно — headline:
+// для строки сайта главный ключ и 1–3 второстепенных с частотностью Ahrefs
+// (buildHeadline); его сервер берёт из каждой новой карты целиком.
 //
 // Репозиторий хаба открыт всем, поэтому карта лежит в нём зашифрованной
 // открытым ключом хаба (/key-map/public-key): прочитать её может только
@@ -86,7 +88,61 @@ export function buildKeyMap(data) {
   }
   const sorted = {};
   for (const h of Object.keys(hosts).sort()) sorted[h] = hosts[h].sort((a, b) => (a.role === b.role ? a.url.localeCompare(b.url) : a.role === 'main' ? -1 : 1));
-  return { mapUpdated: data.updated ?? null, hosts: sorted, topics: buildTopics(data) };
+  return { mapUpdated: data.updated ?? null, hosts: sorted, topics: buildTopics(data), headline: buildHeadline(data) };
+}
+
+// Ключи сайта для строки сайта в «Ключах сайтов» (просьба владелицы
+// 14.11.2026): главный ключ и только настоящие второстепенные — 1–3, с
+// частотностью Ahrefs из карты. Первые страницы сайтов делались без ключей,
+// у таких страниц Ahrefs 0 — их не берём. Берётся из вида «Сайты» карты
+// (страницы «основной» и «второстепенный»), частотность — колонка «Ahrefs»
+// группы ключа (в строке группы r[3]).
+export const HEADLINE_SECONDARY = 3;
+const plain = (s) => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+/**
+ * Частотность Ahrefs ключа в его группе карты; null — данных Ahrefs нет (ключа
+ * нет в группе или в выгрузке Ahrefs, там 0). Серая строка группы (r[6] = 0,
+ * «Google: один запрос») — тот же запрос, что строка выше: у неё Ahrefs часто
+ * 0, тогда берём частотность той строки («futcoins» → «fut coins»).
+ */
+function ahrefsOf(key, g) {
+  const rows = g?.r ?? [];
+  let best = null;
+  rows.forEach((r, i) => {
+    if (plain(r[0]) !== plain(key)) return;
+    let v = Number(r[3]) || 0;
+    if (!v && !r[6]) for (let j = i - 1; j >= 0; j--) if (rows[j][6]) { v = Number(rows[j][3]) || 0; break; }
+    if (v > 0) best = Math.max(best ?? 0, v);
+  });
+  return best;
+}
+/** @returns {Record<string, { country: string, url: string, key: string, role: 'main' | 'secondary', ahrefs: number | null }[]>} */
+export function buildHeadline(data) {
+  const out = {};
+  for (const c of data.countries ?? []) {
+    const groups = new Map((c.groups ?? []).map((g) => [g.id, g]));
+    const groupByHead = new Map((c.groups ?? []).map((g) => [norm(g.h), g]));
+    const bySite = new Map();
+    for (const p of c.pages ?? []) {
+      const r = String(p.role ?? '');
+      const role = r.startsWith('основной') && !r.includes('бронь') ? 'main' : r.startsWith('второстепенный') ? 'secondary' : null;
+      if (!role || !norm(p.key) || !p.url || p.url === '—') continue;
+      const host = hostOf(p.site);
+      const list = bySite.get(host) ?? (bySite.set(host, []), bySite.get(host));
+      if (list.some((x) => x.key === norm(p.key))) continue;
+      list.push({ country: c.id, url: fullUrl(p.site, p.url), key: norm(p.key), role, ahrefs: ahrefsOf(p.key, groups.get(p.gid) ?? groupByHead.get(norm(p.group))) });
+    }
+    for (const [host, list] of bySite) {
+      const main = list.filter((x) => x.role === 'main');
+      const secondary = list
+        .filter((x) => x.role === 'secondary' && x.ahrefs)
+        .sort((a, b) => b.ahrefs - a.ahrefs || a.key.localeCompare(b.key))
+        .slice(0, HEADLINE_SECONDARY);
+      if (!main.length && !secondary.length) continue;
+      (out[host] ??= []).push(...main, ...secondary);
+    }
+  }
+  return Object.fromEntries(Object.keys(out).sort().map((h) => [h, out[h]]));
 }
 
 // Ключи темы для ТЗ групп (колонка «Ключи гео», просьба владелицы 13.11.2026:
@@ -150,9 +206,11 @@ async function main(argv) {
   const hosts = Object.keys(map.hosts);
   console.log(`Карта от ${map.mapUpdated}: ${hosts.length} сайтов, ${hosts.reduce((a, h) => a + map.hosts[h].length, 0)} страниц с ключами.`);
   for (const [c, keys] of Object.entries(map.topics)) console.log(`  ключи темы ${c}: ${keys.length} (${keys.slice(0, 4).join(', ')}…)`);
-  for (const h of hosts) {
-    const main = map.hosts[h].filter((p) => p.role === 'main').map((p) => p.key);
-    console.log(`  ${h}: главный ${main.join(' · ') || '—'}, второстепенных ${map.hosts[h].length - main.length}`);
+  const vol = (x) => `${x.key} (${x.ahrefs ?? '—'})`;
+  for (const [h, keys] of Object.entries(map.headline)) {
+    const main = keys.filter((x) => x.role === 'main');
+    const sec = keys.filter((x) => x.role === 'secondary');
+    console.log(`  ${h}: главный ${main.map(vol).join(' · ') || '—'}${sec.length ? `; второстепенные ${sec.map(vol).join(', ')}` : ''}`);
   }
   if (prev?.v === 1 && prev.hash === mapHash(map) && prev.pub === fingerprint(pem)) {
     console.log('Карта не изменилась — файл не трогаю.');

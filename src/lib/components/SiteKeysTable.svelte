@@ -15,7 +15,7 @@
   import { bareAddress, nakedQuery, type NakedVariant } from '$lib/utils/naked';
   import { TableSort } from '$lib/table-sort.svelte';
   import { classifyIntent } from '$lib/utils/intent';
-  import { keyMarker, markTitle, mapGeo, mapImpressions, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
+  import { keyMarker, markTitle, mapGeo, ROLE_LABEL, type MapPage } from '$lib/utils/key-map';
   import { checkoutLeads, checkoutSplit } from '$lib/utils/checkout-lead';
   import { Volumes } from '$lib/volumes.svelte';
   import { keyGroups, gi, activeGroup, itemKey, inActive, type OtherOwner, type OtherLink } from '$lib/group-items.svelte';
@@ -134,8 +134,6 @@
     for (const p of map.filter((x) => x.role === 'secondary')) push(abs(p.url), 'url', 'secondary', p.key, geoOf(p.country));
     return out;
   });
-  // Главный и второстепенные — только с показами за период, с числом показов.
-  const mapStats = $derived(keyMap && !loading ? mapImpressions(keyMap, rows) : null);
   // Связки из отчёта Google — «Свой ключ» показывает только те, которых здесь нет.
   const rowKeys = $derived(new Set(rows.map((r) => itemKey(r.page, r.query))));
   let err = $state<string | null>(null);
@@ -263,21 +261,7 @@
     {/if}
   </div>
   {#if !loading && !err}
-    {#if keyMap}
-      {@const st = mapStats}
-      <p class="mb-1 flex flex-wrap items-center gap-1 text-xs text-ink-2">
-        <span>Карта ключей FUT, с показами за период: главный</span>
-        {#each st?.main ?? [] as m (m.key + m.cc)}<span class="badge badge-ok" title="Главный · {m.url} · {m.geo} · показов: {m.impressions}">{st && st.main.length > 1 ? `${m.key} (${m.cc})` : m.key} <span class="app-num opacity-70">{fmt(m.impressions)}</span></span>{/each}
-        {#if !st?.main.length}<span class="text-ink-4">без показов</span>{/if}
-        {#if st?.secondary.length}
-          <span>· второстепенные</span>
-          {#each st.secondary as s2 (s2.key + s2.cc)}<span class="badge badge-muted" title="Второстепенный · {s2.url} · показов: {s2.impressions}">{s2.key} <span class="app-num opacity-70">{fmt(s2.impressions)}</span></span>{/each}
-        {/if}
-        {#if st?.quiet.length}
-          <span class="text-ink-4" title="Ключи карты без показов за период — их не продвигаем: {st.quiet.map((p) => `${p.key}${p.role === 'main' ? ' (главный)' : ''}`).join(', ')}">· без показов: {st.quiet.length}</span>
-        {/if}
-      </p>
-    {:else}
+    {#if !keyMap}
       <p class="mb-1 text-xs text-ink-4">Сайта пока нет в «Карте ключей FUT» — пометок «главный» и «второстепенный» нет. Хаб ищет его в карте раз в 3 дня.</p>
     {/if}
   {/if}

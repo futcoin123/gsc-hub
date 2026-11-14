@@ -77,24 +77,6 @@ export interface SiteTotalsRow {
 }
 
 /** Все сайты отмеченных консолей (без фильтра по группе) с итогами за период. */
-/** Запросы каждого сайта за период с показами (для ключей карты в строке сайта): siteUrl → строки. */
-export async function siteQueriesForPeriod(db: Db, p: Period): Promise<Map<string, { query: string; impressions: number }[]>> {
-  const accounts = listReportAccounts(db);
-  const pairs: { acc: AccountRow; site: SiteRow }[] = [];
-  const lists = await Promise.allSettled(accounts.map((a) => listSitesForAccount(db, a)));
-  lists.forEach((r, i) => {
-    if (r.status === 'fulfilled') for (const s of r.value) if (s.permissionLevel !== 'siteUnverifiedUser') pairs.push({ acc: accounts[i], site: s });
-  });
-  const res = await mapSettledLimit(pairs, ({ acc, site }) =>
-    searchAnalyticsQuery(db, acc, site.siteUrl, { startDate: p.startDate, endDate: p.endDate, dimensions: ['query'], rowLimit: 5000 })
-  );
-  const out = new Map<string, { query: string; impressions: number }[]>();
-  res.forEach((r, i) => {
-    if (r.status === 'fulfilled') out.set(pairs[i].site.siteUrl, r.value.map((x) => ({ query: x.keys[0] ?? '', impressions: x.impressions })));
-  });
-  return out;
-}
-
 export async function sitesForPeriod(db: Db, p: Period): Promise<{ sites: SiteTotalsRow[]; errors: { account: string; reason: string }[] }> {
   const accounts = listReportAccounts(db);
   const errors: { account: string; reason: string }[] = [];

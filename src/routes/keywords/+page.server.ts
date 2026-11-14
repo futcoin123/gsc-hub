@@ -2,18 +2,18 @@ import type { PageServerLoad } from './$types';
 import { reportPeriod } from '$lib/server/report-period';
 import { db } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/guard';
-import { parsePeriod, sitesForPeriod, siteQueriesForPeriod } from '$lib/server/site-keys';
+import { parsePeriod, sitesForPeriod } from '$lib/server/site-keys';
 import { clicksForRange, normHost } from '$lib/server/button-clicks';
 import { siteHostname } from '$lib/utils/url-filters';
-import { keyMapAll } from '$lib/server/key-map';
-import { mapImpressions } from '$lib/utils/key-map';
+import { keyMapAll, keyMapHeadline } from '$lib/server/key-map';
+import { mapSummary } from '$lib/utils/key-map';
 import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
   const period = reportPeriod(db());
   await seedSiteLabels(db());
-  const [{ sites, errors }, queries] = await Promise.all([sitesForPeriod(db(), period), siteQueriesForPeriod(db(), period).catch(() => new Map<string, { query: string; impressions: number }[]>())]);
+  const { sites, errors } = await sitesForPeriod(db(), period);
   // Нажатия кнопки оплаты (переход на партнёрку) по доменам за тот же период —
   // счётчик хаба на сайтах.
   const payByHost: Record<string, number> = {};
@@ -31,18 +31,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   for (const st of sites) pay[st.siteUrl] = payByHost[hostOf(st.siteUrl)] ?? 0;
   // Итого по доменам: у домена может быть две property — не считаем дважды.
   const payTotal = [...new Set(sites.map((st) => hostOf(st.siteUrl)))].reduce((a, h) => a + (payByHost[h] ?? 0), 0);
-  // «Карта ключей FUT»: главный и второстепенные ключи сайта — только с показами
-  // за период и сколько показов (просьба владелицы 14.11.2026); null — сайта в карте нет.
-  let all = new Map<string, Parameters<typeof mapImpressions>[0]>();
+  // «Карта ключей FUT»: главный ключ сайта и 1–3 второстепенных с частотностью
+  // Ahrefs, как их отобрала карта (просьба владелицы 14.11.2026); null — сайта в карте нет.
+  let all = new Map<string, unknown>();
+  let headline = new Map<string, Parameters<typeof mapSummary>[0]>();
   try {
     all = keyMapAll(db());
+    headline = keyMapHeadline(db());
   } catch {
     // карта не прочиталась — колонка покажет «нет в карте»
   }
-  const keyMap: Record<string, ReturnType<typeof mapImpressions> | null> = {};
+  const keyMap: Record<string, ReturnType<typeof mapSummary> | null> = {};
   for (const st of sites) {
-    const pages = all.get(hostOf(st.siteUrl));
-    keyMap[st.siteUrl] = pages ? mapImpressions(pages, queries.get(st.siteUrl) ?? []) : null;
+    const keys = headline.get(hostOf(st.siteUrl));
+    keyMap[st.siteUrl] = keys ? mapSummary(keys) : null;
   }
   return { period, sites, errors, pay, payTotal, keyMap, keyMapSites: all.size, labels: siteLabels(db()) };
 };
