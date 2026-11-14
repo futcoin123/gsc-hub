@@ -11,9 +11,9 @@ All notable changes to this project are documented here. Format loosely follows
 - **Page clicks next to keywords.** An expanded site in site keys shows a
   "Страницы" block: each page's impressions and clicks as a whole, how many
   clicks show up under its keywords and how many are hidden by Google (rare
-  queries it does not report). It opens by itself when the site has clicks;
-  rows with hidden clicks are highlighted; clicking a page narrows the keyword
-  table to it.
+  queries it does not report), plus checkouts from the page (site counter).
+  The block starts collapsed; rows with hidden clicks are highlighted;
+  clicking a page narrows the keyword table to it, ↗ opens the page itself.
 - **Country keywords as a column, from the topic.** In the group brief and
   the CSV the country keywords are the last column, one per row of the
   country block (5–10 per country; extra key-only rows when the block is

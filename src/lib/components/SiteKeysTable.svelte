@@ -280,24 +280,25 @@
 
   {#if !loading && !err && pageStats.length}
     {@const pageRows = pagesAll ? pageStats : pageStats.slice(0, 8)}
-    <!-- Клики по страницам — рядом с ключами, без переключения: у страницы бывают
-         клики по запросам, которые Google не показывает. Открыто, если клики есть. -->
-    <details class="mb-2 rounded border border-line bg-pane" open={pagesClicks > 0}>
+    <!-- Клики по страницам — рядом с ключами: у страницы бывают клики по запросам,
+         которые Google не показывает. Всегда свёрнуто — владелица открывает сама. -->
+    <details class="mb-2 rounded border border-line bg-pane">
       <summary class="cursor-pointer select-none px-2 py-1.5 text-xs font-semibold text-ink-2 hover:bg-sunk">
         Страницы ({pageStats.length}) · кликов {fmt(pagesClicks)}
         <span class="font-normal text-ink-3">— клики и показы страницы целиком; «по ключам» — сколько из них видно в ключах ниже, «скрыто Google» — по редким запросам, которые Google не показывает. Нажмите на страницу — её ключи.</span>
       </summary>
       <table class="app-table border-t border-line" data-nostick>
-        <thead><tr><th>Страница</th><th class="num">Показы</th><th class="num">Клики</th><th class="num" title="Клики по ключам, которые Google показывает (строки таблицы ниже)">по ключам</th><th class="num" title="Клики по запросам, которые Google скрывает: страница их получила, но ключа не видно">скрыто Google</th><th class="num">Pos</th><th class="num" title="Сколько ключей этой страницы в таблице ниже">ключей</th></tr></thead>
+        <thead><tr><th>Страница</th><th class="num">Показы</th><th class="num">Клики</th><th class="num" title="Клики по ключам, которые Google показывает (строки таблицы ниже)">по ключам</th><th class="num" title="Клики по запросам, которые Google скрывает: страница их получила, но ключа не видно">скрыто Google</th><th class="num">Pos</th><th class="num" title="Нажали кнопку оплаты на этой странице и ушли на кассу — по счётчику сайта за тот же период">Перешли к оплате</th><th class="num" title="Сколько ключей этой страницы в таблице ниже">ключей</th></tr></thead>
         <tbody>
           {#each pageRows as p (p.page)}
             <tr class={p.hiddenClicks ? 'bg-warn-t/40' : ''}>
-              <td class="max-w-[28rem]"><button type="button" class="pii break-all text-left text-acc hover:underline" title="Показать в таблице ниже только ключи этой страницы" onclick={() => (pageOnly = pageOnly === p.page ? null : p.page)}>{p.page}</button>{#if pageOnly === p.page}<span class="ml-1 text-[10px] text-ink-3">· показаны ниже</span>{/if}</td>
+              <td class="max-w-[28rem]"><button type="button" class="pii break-all text-left text-acc hover:underline" title="Показать в таблице ниже только ключи этой страницы" onclick={() => (pageOnly = pageOnly === p.page ? null : p.page)}>{p.page}</button><a class="ml-1 inline-flex rounded p-0.5 align-middle text-ink-4 hover:bg-sunk hover:text-acc" href={p.page} target="_blank" rel="noopener noreferrer" title="Открыть страницу (в новой вкладке)" aria-label="Открыть страницу {p.page}"><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>{#if pageOnly === p.page}<span class="ml-1 text-[10px] text-ink-3">· показаны ниже</span>{/if}</td>
               <td class="num app-num">{fmt(p.impressions)}</td>
               <td class="num app-num {p.clicks ? 'font-semibold' : 'text-ink-4'}">{fmt(p.clicks)}</td>
               <td class="num app-num {p.keyClicks ? '' : 'text-ink-4'}">{fmt(p.keyClicks)}</td>
               <td class="num app-num {p.hiddenClicks ? 'font-semibold text-warn' : 'text-ink-4'}">{fmt(p.hiddenClicks)}</td>
               <td class="num app-num">{p.position ? p.position.toFixed(1) : '—'}</td>
+              <td class="num app-num {checkouts[pathOf(p.page)] ? 'font-semibold' : 'text-ink-4'}">{fmt(checkouts[pathOf(p.page)] ?? 0)}</td>
               <td class="num app-num text-ink-3">{p.keys}</td>
             </tr>
           {/each}
