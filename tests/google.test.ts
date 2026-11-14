@@ -445,6 +445,10 @@ describe('google.searchAnalyticsQuery', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ keys: ['2026-11-01'], clicks: 3, impressions: 400 });
       expect(rows[0].position).toBeCloseTo(17.5);
+      // «Кнопки» показывают, до какого часа Google отдал данные за сегодня.
+      const { hourlyStatus } = await import('../src/lib/server/google');
+      expect(hourlyStatus('2026-11-01').latestHour).toBe(Date.parse('2026-11-01T05:00:00-08:00'));
+      expect(hourlyStatus('2026-11-02').latestHour).toBeNull();
     } finally {
       vi.useRealTimers();
     }

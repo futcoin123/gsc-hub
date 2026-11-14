@@ -302,6 +302,13 @@
       <PeriodNote start={data.period.startDate} end={data.period.endDate} />
       <span class="text-xs text-ink-3">{periodLabel}</span>
       <span class="text-xs text-ink-3">· {fmt(totals.n)} {sitesWord(totals.n)} · показов в Google {fmt(totals.impr)} · кликов из Google {fmt(totals.gsc)}{bingCovers ? ` · кликов из Bing ${fmt(totals.bClicks)}` : ''} · просмотров {fmt(totals.v)} · других кнопок {fmt(totals.b)} · перешли к оплате {fmt(totals.s)}</span>
+      {#if data.hourly}
+        {@const h = data.hourly}
+        {@const hm = (ms: number) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' }).format(new Date(ms))}
+        <span class="text-xs {h.error && (!h.checkedAt || (h.errorAt ?? 0) > h.checkedAt) ? 'text-bad' : 'text-ink-3'}" title="«Сегодня» — с 00:00 по Берлину, из почасовых данных Google. В Search Console «24 часа» — последние сутки, туда входит и вчерашний день, поэтому там цифры обычно больше. Последние часы Google выкладывает с опозданием.">
+          · {#if h.error && (!h.checkedAt || (h.errorAt ?? 0) > h.checkedAt)}Google не отдал почасовые данные ({h.error}) — показаны суточные{:else if h.latestHour !== null}данные Google по часам — до {hm(h.latestHour + 3600_000)}{:else if h.checkedAt}Google ещё не выложил часы за сегодня{/if}
+        </span>
+      {/if}
       {#if data.bingState === 'loading'}<span class="text-xs text-ink-3">· Bing загружается</span>{:else if data.bingLatest && data.period.endDate > data.bingLatest}<span class="text-xs text-ink-3" title="Bing выкладывает данные с опозданием на 1–3 дня">· Bing — данные по {fmtDay(data.bingLatest)}</span>{/if}
       <label class="ml-auto flex items-center gap-1 text-xs text-ink-2"><input type="checkbox" bind:checked={withLinks} /> показывать и обычные ссылки</label>
     </div>

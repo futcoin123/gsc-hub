@@ -65,6 +65,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **"Today" on Buttons shows how far Google's hourly data goes.** Next to the
+  totals: the last hour Google has data for today, "no hours yet", or the
+  hourly request's error (daily data shown then). An hourly failure used to
+  fall back to daily data silently, which is nearly empty for a fresh day.
 - **Dashboard is a table instead of cards.** One row per site: clicks,
   impressions, CTR, position and their change (absolute and percent; position
   ▲▼), a totals row on top, sorting by any column. A "Закупки ссылок" column

@@ -7,7 +7,7 @@ import { requireAdmin } from '$lib/server/guard';
 import { parsePeriod, sitesForPeriod } from '$lib/server/site-keys';
 import { checkoutSourcesForRange, clicksForRange, lastSeen, normHost, timeForRange, visitStatsForRange, workerScript } from '$lib/server/button-clicks';
 import { siteHostname } from '$lib/utils/url-filters';
-import { listAllKnownSites } from '$lib/server/google';
+import { listAllKnownSites, hourlyStatus } from '$lib/server/google';
 import { activeGroupHosts } from '$lib/server/site-groups';
 import { bingConfigured, bingTotals, getBing } from '$lib/server/bing';
 import { counterChecks } from '$lib/server/counter-log';
@@ -82,6 +82,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const seen = Object.fromEntries(Object.entries(lastSeen(db())).filter(([h]) => mine(h)));
   return {
     period,
+    // «Сегодня»: до какого часа Google отдал почасовые данные (или ошибка).
+    hourly: period.key === 'today' ? hourlyStatus(period.startDate) : null,
     hosts: [...hosts].sort(),
     clicks: clicks.filter((r) => mine(r.host)),
     time: time.filter((t) => mine(t.host)),

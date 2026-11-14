@@ -285,6 +285,25 @@ function isTodayQuery(body: SearchAnalyticsBody): boolean {
   );
 }
 
+// Что Google отдал на почасовые запросы «Сегодня»: до какого часа есть данные
+// и последняя ошибка. Показываем у периода «Сегодня» на «Кнопках» — иначе не
+// понять, Google ещё не выложил часы или запрос не прошёл (тогда панель молча
+// берёт суточные, а их за начавшийся день у Google почти нет).
+export interface HourlyStatus {
+  /** Начало последнего часа с показами среди всех сайтов (мс), за сегодня по Германии. */
+  latestHour: number | null;
+  /** Когда последний раз спрашивали. */
+  checkedAt: number | null;
+  /** Последняя ошибка почасового запроса и когда она была. */
+  error: string | null;
+  errorAt: number | null;
+}
+const hourly: HourlyStatus & { day: string | null } = { latestHour: null, checkedAt: null, error: null, errorAt: null, day: null };
+export function hourlyStatus(day: string = localToday()): HourlyStatus {
+  const sameDay = hourly.day === day;
+  return { latestHour: sameDay ? hourly.latestHour : null, checkedAt: hourly.checkedAt, error: hourly.error, errorAt: hourly.errorAt };
+}
+
 // Если Google отверг почасовой запрос (400), этот разрез какое-то время не
 // повторяем, чтобы не удваивать число запросов. Ключ — консоль + разрез.
 const hourlyRejected = new Map<string, number>();
@@ -312,12 +331,20 @@ async function todayFromHourly(db: Db, acc: AccountRow, siteUrl: string, body: S
     });
   } catch (e) {
     if (/searchAnalytics 400/.test((e as Error).message)) hourlyRejected.set(rejectKey, Date.now() + HOURLY_RETRY_MS);
+    hourly.error = (e as Error).message.slice(0, 200);
+    hourly.errorAt = Date.now();
     throw e;
+  }
+  hourly.checkedAt = Date.now();
+  if (hourly.day !== day) {
+    hourly.day = day;
+    hourly.latestHour = null;
   }
   const groups = new Map<string, { other: string[]; clicks: number; impressions: number; posSum: number }>();
   for (const r of rows) {
     const at = hourInstant(r.keys[0] ?? '');
     if (at === null || localToday(at) !== day) continue;
+    if (r.impressions > 0 && (hourly.latestHour === null || at > hourly.latestHour)) hourly.latestHour = at;
     const other = r.keys.slice(1);
     const k = JSON.stringify(other);
     const g = groups.get(k) ?? groups.set(k, { other, clicks: 0, impressions: 0, posSum: 0 }).get(k)!;
