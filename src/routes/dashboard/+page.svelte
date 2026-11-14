@@ -113,14 +113,24 @@
       pImpr: data.comparable ? pct(c.impressions, p.impressions) : null,
       ctr: c.impressions ? c.ctr : null,
       pos: c.position || null,
-      dPos: data.comparable ? posMove(c.position, p.position) : null
+      dPos: data.comparable ? posMove(c.position, p.position) : null,
+      // Входы не из Google и не прямые (счётчик на сайте): Bing, другие
+      // поисковики, ИИ, другие сайты и соцсети — и их сумма с изменением.
+      eb: e.ext.b,
+      es: e.ext.s,
+      eai: e.ext.ai,
+      eo: e.ext.o,
+      ext: extSum(e.ext),
+      dExt: extSum(e.ext) - extSum(e.extPrev),
+      pExt: pct(extSum(e.ext), extSum(e.extPrev))
     };
   }
+  const extSum = (x: { b: number; s: number; ai: number; o: number }) => x.b + x.s + x.ai + x.o;
 
-  type K = 'site' | 'clicks' | 'dClicks' | 'impr' | 'dImpr' | 'ctr' | 'pos' | 'dPos' | 'buy';
-  const sort = new TableSort<K>('clicks', -1, ['clicks', 'dClicks', 'impr', 'dImpr', 'ctr', 'dPos', 'buy']);
+  type K = 'site' | 'clicks' | 'dClicks' | 'impr' | 'dImpr' | 'ctr' | 'pos' | 'dPos' | 'eb' | 'es' | 'eai' | 'eo' | 'ext' | 'buy';
+  const sort = new TableSort<K>('clicks', -1, ['clicks', 'dClicks', 'impr', 'dImpr', 'ctr', 'dPos', 'eb', 'es', 'eai', 'eo', 'ext', 'buy']);
   const sortValue = (e: Entry, k: K): string | number | null => {
-    if (e.error && k !== 'site' && k !== 'buy') return null;
+    if (e.error && !['site', 'buy', 'eb', 'es', 'eai', 'eo', 'ext'].includes(k)) return null;
     if (k === 'site') return siteDomain(e.siteUrl);
     if (k === 'buy') return e.buys[0]?.date ?? null;
     return figures(e)[k];
@@ -135,7 +145,12 @@
 
   const totals = $derived.by(() => {
     let c = 0, i = 0, pc = 0, pi = 0, pw = 0, ppw = 0;
+    const ext = { b: 0, s: 0, ai: 0, o: 0 }, extPrev = { b: 0, s: 0, ai: 0, o: 0 };
     for (const e of visible) {
+      for (const k of ['b', 's', 'ai', 'o'] as const) {
+        ext[k] += e.ext[k];
+        extPrev[k] += e.extPrev[k];
+      }
       if (e.error) continue;
       c += e.currentTotals.clicks;
       i += e.currentTotals.impressions;
@@ -148,7 +163,8 @@
     return {
       clicks: c, dClicks: data.comparable ? c - pc : null, pClicks: data.comparable ? pct(c, pc) : null,
       impr: i, dImpr: data.comparable ? i - pi : null, pImpr: data.comparable ? pct(i, pi) : null,
-      ctr: i ? c / i : null, pos: pos || null, dPos: data.comparable ? posMove(pos, ppos) : null
+      ctr: i ? c / i : null, pos: pos || null, dPos: data.comparable ? posMove(pos, ppos) : null,
+      ext, ext_: extSum(ext), dExt: extSum(ext) - extSum(extPrev), pExt: pct(extSum(ext), extSum(extPrev))
     };
   });
 
@@ -274,7 +290,7 @@
       </span>
     </td>
     {#if e.error}
-      <td colspan="7" class="pii text-xs text-bad" title={e.error}>не загрузилось: {e.error.slice(0, 80)}</td>
+      <td colspan="7" class="pii text-xs text-bad" title={e.error}>Google не ответил: {e.error.slice(0, 80)}</td>
     {:else}
       <td class="num app-num pii font-semibold">{fmt(f.clicks)}</td>
       <td class="num app-num">{@render delta(f.dClicks, f.pClicks)}</td>
@@ -284,12 +300,17 @@
       <td class="num app-num pii">{f.pos === null ? '—' : f.pos.toFixed(1)}</td>
       <td class="num app-num">{@render posDelta(f.dPos)}</td>
     {/if}
+    <td class="num app-num pii {f.eb ? '' : 'text-ink-4'}">{fmt(f.eb)}</td>
+    <td class="num app-num pii {f.es ? '' : 'text-ink-4'}">{fmt(f.es)}</td>
+    <td class="num app-num pii {f.eai ? '' : 'text-ink-4'}">{fmt(f.eai)}</td>
+    <td class="num app-num pii {f.eo ? '' : 'text-ink-4'}">{fmt(f.eo)}</td>
+    <td class="num app-num pii"><span class={f.ext ? 'font-semibold' : 'text-ink-4'}>{fmt(f.ext)}</span> {#if f.dExt}{@render delta(f.dExt, f.pExt)}{/if}</td>
     <td class="text-xs" onclick={(ev) => ev.stopPropagation()}>{@render buysCell(e)}</td>
   </tr>
   {#if isOpen && !e.error}
     <tr class="bg-sunk hover:bg-sunk">
       <td></td>
-      <td colspan="9" class="py-2 pr-3">
+      <td colspan="14" class="py-2 pr-3">
         <div class="mb-1 flex flex-wrap items-center gap-3 text-[11px] text-ink-3">
           <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.clicks}></i>клики</span>
           <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.impr}></i>показы</span>
@@ -363,6 +384,11 @@
             <SortTh {sort} k="ctr" label="CTR" num />
             <SortTh {sort} k="pos" label="Позиция" num title="Средняя позиция, взвешенная по показам" />
             <SortTh {sort} k="dPos" label="± позиция" num title="▲ — поднялся (место стало выше), ▼ — опустился; к {cmpLabel || 'прошлому периоду'}" />
+            <SortTh {sort} k="eb" label="Bing" num title="Входы на сайт из Bing — по счётчику на сайте" />
+            <SortTh {sort} k="es" label="Др. поиск" num title="Входы из других поисковиков: Яндекс, DuckDuckGo, Yahoo, Ecosia… — по счётчику на сайте" />
+            <SortTh {sort} k="eai" label="ИИ" num title="Входы из ИИ-помощников: ChatGPT, Perplexity, Gemini, Copilot, Claude — по счётчику на сайте" />
+            <SortTh {sort} k="eo" label="Др. сайты" num title="Входы с других сайтов, из соцсетей и по ссылкам с метками utm — по счётчику на сайте" />
+            <SortTh {sort} k="ext" label="Всего не из Google" num title="Bing + другие поисковики + ИИ + другие сайты, без Google и без прямых заходов; рядом — изменение к {cmpLabel || 'прошлому периоду'}" />
             <SortTh {sort} k="buy" label="Закупки ссылок" title="Последняя закупка ссылок на сайт из «Групп»: дата и сколько ссылок; нажмите — что изменилось после неё. «ещё N» — прошлые закупки" />
           </tr>
           <tr class="is-total">
@@ -375,6 +401,11 @@
             <td class="num app-num pii">{totals.ctr === null ? '—' : (totals.ctr * 100).toFixed(1) + '%'}</td>
             <td class="num app-num pii">{totals.pos === null ? '—' : totals.pos.toFixed(1)}</td>
             <td class="num app-num">{@render posDelta(totals.dPos)}</td>
+            <td class="num app-num pii">{fmt(totals.ext.b)}</td>
+            <td class="num app-num pii">{fmt(totals.ext.s)}</td>
+            <td class="num app-num pii">{fmt(totals.ext.ai)}</td>
+            <td class="num app-num pii">{fmt(totals.ext.o)}</td>
+            <td class="num app-num pii"><span class="font-semibold">{fmt(totals.ext_)}</span> {@render delta(totals.dExt, totals.pExt)}</td>
             <td></td>
           </tr>
         </thead>

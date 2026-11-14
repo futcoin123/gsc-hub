@@ -8,6 +8,10 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Dashboard: visits from outside Google.** Columns for Bing, other search
+  engines, AI assistants, other sites and their total with change against the
+  comparison period, from the site counter; Google (already in console
+  clicks) and direct visits are left out.
 - **Page clicks next to keywords.** An expanded site in site keys shows a
   "Страницы" block: each page's impressions and clicks as a whole, how many
   clicks show up under its keywords and how many are hidden by Google (rare

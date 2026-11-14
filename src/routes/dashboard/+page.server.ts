@@ -10,6 +10,27 @@ import { labelKey } from '$lib/utils/site-label';
 import { addCalendarDays } from '$lib/server/gsc-calendar';
 import { compareWindow } from '$lib/utils/compare-window';
 import { userFavorites } from '$lib/server/user-selection';
+import { clicksForRange } from '$lib/server/button-clicks';
+import { sourceOf } from '$lib/utils/traffic-source';
+
+/** Входы на сайт не из Google и не прямые — по счётчику на сайте. */
+type Ext = { b: number; s: number; ai: number; o: number };
+const noExt = (): Ext => ({ b: 0, s: 0, ai: 0, o: 0 });
+function externalVisits(start: string, end: string): Map<string, Ext> {
+  const out = new Map<string, Ext>();
+  for (const r of clicksForRange(db(), start, end)) {
+    if (r.kind !== 'view' || !r.target) continue;
+    const src = sourceOf(r.target);
+    if (!src || src.group === 'direct' || src.key === 'Google') continue;
+    const e = out.get(r.host) ?? noExt();
+    if (src.key === 'Bing') e.b += r.n;
+    else if (src.group === 'search') e.s += r.n;
+    else if (src.group === 'ai') e.ai += r.n;
+    else e.o += r.n;
+    out.set(r.host, e);
+  }
+  return out;
+}
 
 // Dashboard — таблица сайтов, строка на сайт (просьба владелицы 13.11.2026:
 // карточки занимают место; нужно сортировать по кликам, показам, позиции и их
@@ -47,8 +68,16 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     for (const [h, b] of bySite) buys.set(h, [...(buys.get(h) ?? []), b]);
   }
 
+  // Заходы не из Google (просьба владелицы 14.11.2026: продвижение идёт и в
+  // Bing, ИИ, других поисковиках и сайтах) — за те же даты и за период сравнения.
+  const prevWin = cmp.window ?? { startDate: addCalendarDays(period.startDate, -days), endDate: addCalendarDays(period.startDate, -1) };
+  const extNow = externalVisits(period.startDate, period.endDate);
+  const extPrev = externalVisits(prevWin.startDate, prevWin.endDate);
+
   await seedSiteLabels(db());
   const rows = entries.map((e) => ({
+    ext: extNow.get(labelKey(e.siteUrl)) ?? noExt(),
+    extPrev: extPrev.get(labelKey(e.siteUrl)) ?? noExt(),
     ...e,
     events: toChartEvents(eventsByHost.get(hostOfSite(e.siteUrl)) ?? []),
     // Новые закупки сверху (listGroupPurchases уже отдаёт по дате, новые первыми).
