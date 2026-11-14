@@ -75,6 +75,11 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **"My other sites" says where the number comes from.** Next to the
+  position: the other site's impressions for the query over 28 days; the
+  tooltip names the source (that site's Search Console, last 28 days, not the
+  header period), the page, position, impressions and clicks; the site name
+  opens that page.
 - **"Today" on Buttons shows how far Google's hourly data goes.** Next to the
   totals: the last hour Google has data for today, "no hours yet", or the
   hourly request's error (daily data shown then). An hourly failure used to

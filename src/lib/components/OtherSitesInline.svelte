@@ -54,6 +54,14 @@
     return pos !== null && position !== null && pos < position;
   }
   const SHOW = 6;
+  // Откуда цифра: Search Console того сайта, этот же запрос, последние 28 дней
+  // (не период в шапке), страница с наибольшими показами. Ключа в текстах той
+  // страницы может и не быть: Google показывает сайт и по совпадению с адресом
+  // (futcoin.es по запросу «fut coin»).
+  const ownerTitle = (host: string, o: OtherOwner) =>
+    `По данным Search Console сайта ${host} за последние 28 дней (не за период в шапке): запрос «${query}» — ` +
+    `${o.page ? `страница ${o.page}, ` : ''}средняя позиция ${o.position.toFixed(1)}, показов ${o.impressions}, кликов ${o.clicks}. ` +
+    `Слов запроса может не быть в текстах страницы: Google ставит сайт и по совпадению с адресом сайта. Нажмите на сайт — откроется эта страница.`;
   let drafts = $state<Record<string, number>>({});
   // Пустое поле, пока не вписали число: заготовку не спутать с уже добавленным.
   const draft = (host: string): number | null => drafts[host] ?? null;
@@ -68,9 +76,9 @@
       {@const mine = r.items.find((l) => l.groupId === currentGroupId)}
       {@const elsewhere = r.items.filter((l) => l.groupId !== currentGroupId)}
       <div class="flex flex-wrap items-center gap-x-1 gap-y-0.5 {higher(r.owner?.position ?? null) ? 'text-bad' : 'text-ink-2'}">
-        <span class="whitespace-nowrap {higher(r.owner?.position ?? null) ? 'font-semibold' : ''}">
-          {higher(r.owner?.position ?? null) ? '⚠ ' : ''}<span class="pii">{r.host}</span>
-          {#if higher(r.owner?.position ?? null)}· выше: поз. {r.owner!.position.toFixed(1)}{:else if r.owner}<span class="text-ink-3">· поз. {r.owner.position.toFixed(1)}</span>{/if}
+        <span class="whitespace-nowrap {higher(r.owner?.position ?? null) ? 'font-semibold' : ''}" title={r.owner ? ownerTitle(r.host, r.owner) : undefined}>
+          {higher(r.owner?.position ?? null) ? '⚠ ' : ''}{#if r.owner?.page}<a class="pii hover:underline" href={r.owner.page} target="_blank" rel="noopener noreferrer">{r.host}</a>{:else}<span class="pii">{r.host}</span>{/if}
+          {#if higher(r.owner?.position ?? null)}· выше: поз. {r.owner!.position.toFixed(1)}{:else if r.owner}<span class="text-ink-3">· поз. {r.owner.position.toFixed(1)}</span>{/if}{#if r.owner}<span class="font-normal text-ink-3"> · {r.owner.impressions} показ. за 28 дн.</span>{/if}
         </span>
         {#each elsewhere as l (l.itemId ?? l.groupId)}
           <span class="whitespace-nowrap font-normal text-ink-2">— <b>{l.qty} шт</b> <span class="text-ink-3">({l.groupName})</span>
