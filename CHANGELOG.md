@@ -75,6 +75,11 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **"My other sites" covers 7 days instead of 28.** A site could have ranked
+  and dropped out; the other sites' position and impressions now come from
+  the last 7 days.
+- **Dashboard: counter "Из Google" column** — visits from Google by the site
+  counter, as on Buttons, next to console clicks.
 - **"My other sites" says where the number comes from.** Next to the
   position: the other site's impressions for the query over 28 days; the
   tooltip names the source (that site's Search Console, last 28 days, not the

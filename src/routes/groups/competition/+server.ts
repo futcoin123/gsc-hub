@@ -6,6 +6,7 @@ import { fetchQueryOwners, fetchSiteGeos } from '$lib/server/google';
 import { sameGeo } from '$lib/utils/site-geo';
 import { linksByQuery } from '$lib/server/group-items';
 import { foldQuery, hostKey } from '$lib/utils/fold-query';
+import { OWNERS_DAYS } from '$lib/utils/owners';
 
 /**
  * Колонка «Мои другие сайты»: { site, queries[] } → по каждому ключу другие
@@ -30,7 +31,7 @@ export const POST: RequestHandler = async ({ request, url, locals }) => {
       .filter((x): x is { site: string; query: string } => !!x && typeof x.site === 'string' && typeof x.query === 'string')
       .slice(0, 5000);
     const links = linksByQuery(db());
-    const owners = url.searchParams.get('links') === '1' ? null : await fetchQueryOwners(db());
+    const owners = url.searchParams.get('links') === '1' ? null : await fetchQueryOwners(db(), OWNERS_DAYS);
     const geo = await geos();
     const out: Record<string, { owners: unknown[]; links: unknown[] }> = {};
     for (const p of pairs) {
@@ -47,7 +48,7 @@ export const POST: RequestHandler = async ({ request, url, locals }) => {
   const me = hostKey(body.site);
   const queries = body.queries.filter((q): q is string => typeof q === 'string').slice(0, 5000);
   const links = linksByQuery(db());
-  const owners = url.searchParams.get('links') === '1' ? null : await fetchQueryOwners(db());
+  const owners = url.searchParams.get('links') === '1' ? null : await fetchQueryOwners(db(), OWNERS_DAYS);
   const geo = await geos();
   const near = (h: string) => h !== me && sameGeo(geo?.get(me), geo?.get(h));
   const out: Record<string, { owners: unknown[]; links: unknown[] }> = {};

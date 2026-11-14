@@ -13,17 +13,18 @@ import { userFavorites } from '$lib/server/user-selection';
 import { clicksForRange } from '$lib/server/button-clicks';
 import { sourceOf } from '$lib/utils/traffic-source';
 
-/** Входы на сайт не из Google и не прямые — по счётчику на сайте. */
-type Ext = { b: number; s: number; ai: number; o: number };
-const noExt = (): Ext => ({ b: 0, s: 0, ai: 0, o: 0 });
+/** Входы на сайт по счётчику: g — из Google, остальные — не из Google и не прямые. */
+type Ext = { g: number; b: number; s: number; ai: number; o: number };
+const noExt = (): Ext => ({ g: 0, b: 0, s: 0, ai: 0, o: 0 });
 function externalVisits(start: string, end: string): Map<string, Ext> {
   const out = new Map<string, Ext>();
   for (const r of clicksForRange(db(), start, end)) {
     if (r.kind !== 'view' || !r.target) continue;
     const src = sourceOf(r.target);
-    if (!src || src.group === 'direct' || src.key === 'Google') continue;
+    if (!src || src.group === 'direct') continue;
     const e = out.get(r.host) ?? noExt();
-    if (src.key === 'Bing') e.b += r.n;
+    if (src.key === 'Google') e.g += r.n;
+    else if (src.key === 'Bing') e.b += r.n;
     else if (src.group === 'search') e.s += r.n;
     else if (src.group === 'ai') e.ai += r.n;
     else e.o += r.n;

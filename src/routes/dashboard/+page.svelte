@@ -116,6 +116,7 @@
       dPos: data.comparable ? posMove(c.position, p.position) : null,
       // Входы не из Google и не прямые (счётчик на сайте): Bing, другие
       // поисковики, ИИ, другие сайты и соцсети — и их сумма с изменением.
+      eg: e.ext.g,
       eb: e.ext.b,
       es: e.ext.s,
       eai: e.ext.ai,
@@ -125,12 +126,13 @@
       pExt: pct(extSum(e.ext), extSum(e.extPrev))
     };
   }
+  // «Всего не из Google»: Google (g) сюда не входит.
   const extSum = (x: { b: number; s: number; ai: number; o: number }) => x.b + x.s + x.ai + x.o;
 
-  type K = 'site' | 'clicks' | 'dClicks' | 'impr' | 'dImpr' | 'ctr' | 'pos' | 'dPos' | 'eb' | 'es' | 'eai' | 'eo' | 'ext' | 'buy';
-  const sort = new TableSort<K>('clicks', -1, ['clicks', 'dClicks', 'impr', 'dImpr', 'ctr', 'dPos', 'eb', 'es', 'eai', 'eo', 'ext', 'buy']);
+  type K = 'site' | 'clicks' | 'dClicks' | 'eg' | 'impr' | 'dImpr' | 'ctr' | 'pos' | 'dPos' | 'eb' | 'es' | 'eai' | 'eo' | 'ext' | 'buy';
+  const sort = new TableSort<K>('clicks', -1, ['clicks', 'dClicks', 'eg', 'impr', 'dImpr', 'ctr', 'dPos', 'eb', 'es', 'eai', 'eo', 'ext', 'buy']);
   const sortValue = (e: Entry, k: K): string | number | null => {
-    if (e.error && !['site', 'buy', 'eb', 'es', 'eai', 'eo', 'ext'].includes(k)) return null;
+    if (e.error && !['site', 'buy', 'eg', 'eb', 'es', 'eai', 'eo', 'ext'].includes(k)) return null;
     if (k === 'site') return siteDomain(e.siteUrl);
     if (k === 'buy') return e.buys[0]?.date ?? null;
     return figures(e)[k];
@@ -145,9 +147,9 @@
 
   const totals = $derived.by(() => {
     let c = 0, i = 0, pc = 0, pi = 0, pw = 0, ppw = 0;
-    const ext = { b: 0, s: 0, ai: 0, o: 0 }, extPrev = { b: 0, s: 0, ai: 0, o: 0 };
+    const ext = { g: 0, b: 0, s: 0, ai: 0, o: 0 }, extPrev = { g: 0, b: 0, s: 0, ai: 0, o: 0 };
     for (const e of visible) {
-      for (const k of ['b', 's', 'ai', 'o'] as const) {
+      for (const k of ['g', 'b', 's', 'ai', 'o'] as const) {
         ext[k] += e.ext[k];
         extPrev[k] += e.extPrev[k];
       }
@@ -290,10 +292,13 @@
       </span>
     </td>
     {#if e.error}
-      <td colspan="7" class="pii text-xs text-bad" title={e.error}>Google не ответил: {e.error.slice(0, 80)}</td>
+      <td colspan="2" class="pii text-xs text-bad" title={e.error}>Google не ответил</td>
+      <td class="num app-num pii {f.eg ? '' : 'text-ink-4'}">{fmt(f.eg)}</td>
+      <td colspan="5" class="pii text-xs text-bad" title={e.error}>{e.error.slice(0, 80)}</td>
     {:else}
       <td class="num app-num pii font-semibold">{fmt(f.clicks)}</td>
       <td class="num app-num">{@render delta(f.dClicks, f.pClicks)}</td>
+      <td class="num app-num pii {f.eg ? '' : 'text-ink-4'}">{fmt(f.eg)}</td>
       <td class="num app-num pii">{fmt(f.impr)}</td>
       <td class="num app-num">{@render delta(f.dImpr, f.pImpr)}</td>
       <td class="num app-num pii">{f.ctr === null ? '—' : (f.ctr * 100).toFixed(1) + '%'}</td>
@@ -310,7 +315,7 @@
   {#if isOpen && !e.error}
     <tr class="bg-sunk hover:bg-sunk">
       <td></td>
-      <td colspan="14" class="py-2 pr-3">
+      <td colspan="15" class="py-2 pr-3">
         <div class="mb-1 flex flex-wrap items-center gap-3 text-[11px] text-ink-3">
           <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.clicks}></i>клики</span>
           <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.impr}></i>показы</span>
@@ -379,6 +384,7 @@
             <SortTh {sort} k="site" label="Сайт" />
             <SortTh {sort} k="clicks" label="Клики" num />
             <SortTh {sort} k="dClicks" label="± клики" num title="Изменение кликов к {cmpLabel || 'прошлому периоду'}: сколько и в процентах" />
+            <SortTh {sort} k="eg" label="Из Google" num title="Входы на сайт из Google — по счётчику на сайте (как на «Кнопках»)" />
             <SortTh {sort} k="impr" label="Показы" num />
             <SortTh {sort} k="dImpr" label="± показы" num title="Изменение показов к {cmpLabel || 'прошлому периоду'}" />
             <SortTh {sort} k="ctr" label="CTR" num />
@@ -396,6 +402,7 @@
             <td>Итого · {visible.length} сайтов</td>
             <td class="num app-num pii">{fmt(totals.clicks)}</td>
             <td class="num app-num">{@render delta(totals.dClicks, totals.pClicks)}</td>
+            <td class="num app-num pii">{fmt(totals.ext.g)}</td>
             <td class="num app-num pii">{fmt(totals.impr)}</td>
             <td class="num app-num">{@render delta(totals.dImpr, totals.pImpr)}</td>
             <td class="num app-num pii">{totals.ctr === null ? '—' : (totals.ctr * 100).toFixed(1) + '%'}</td>
