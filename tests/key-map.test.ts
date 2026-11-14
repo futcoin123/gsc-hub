@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb, type Db } from '../src/lib/server/db';
 import { importKeyMap, keyMapFor, keyMapAll, keyMapPublicInfo, decryptKeyMap } from '../src/lib/server/key-map';
-import { keyMarker, missingKeys, mapSummary, mainLabel, type MapPage } from '../src/lib/utils/key-map';
+import { keyMarker, missingKeys, mapImpressions, mainLabel, type MapPage } from '../src/lib/utils/key-map';
 import { buildKeyMap, encryptKeyMap, readMapHtml } from '../scripts/key-map.mjs';
 
 // Кусок данных «Карты ключей FUT» в том виде, как он лежит в странице карты.
@@ -89,16 +89,21 @@ describe('пометки у ключей', () => {
     expect(mark('fifa coins')?.role).toBe('main');
   });
 
-  it('сводка и ключи без показов', () => {
-    expect(mapSummary(pages)).toEqual({
-      main: [
-        { key: 'fifa coins', geo: 'Netherlands', cc: 'NL', url: '/nl/' },
-        { key: 'fifa coins kaufen', geo: 'Germany', cc: 'DE', url: '/' }
-      ],
-      secondary: 2
-    });
-    expect(mainLabel(mapSummary(pages).main[0], true)).toBe('fifa coins (NL)');
-    expect(mainLabel(mapSummary(pages).main[0], false)).toBe('fifa coins');
+  it('главный и второстепенные — только с показами, с числом показов', () => {
+    const st = mapImpressions(pages, [
+      { query: 'fifa coin kaufen', impressions: 30 }, // вариант главного DE
+      { query: 'fifa coins kaufen', impressions: 12 },
+      { query: 'fifa coins', impressions: 5 },
+      { query: 'web app fc 27', impressions: 0 }, // показов нет — ключ «без показов»
+      { query: 'fifa coins kaufen ps5', impressions: 99 } // не ключ карты
+    ]);
+    expect(st.main.map((m) => [m.key, m.cc, m.impressions])).toEqual([
+      ['fifa coins kaufen', 'DE', 42],
+      ['fifa coins', 'NL', 5]
+    ]);
+    expect(st.secondary).toEqual([]);
+    expect(st.quiet.map((q) => q.key).sort()).toEqual(['fc 27 web app', 'fifa coins']); // PL-страница «fifa coins» без показов
+    expect(mainLabel(st.main[1], true)).toBe('fifa coins (NL)');
     expect(missingKeys(pages, ['fifa coin kaufen', 'fifa coins']).map((p) => p.url)).toEqual(['/x/']);
   });
 });

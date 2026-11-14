@@ -75,6 +75,11 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Site keys: map keywords only when they have impressions.** The site row
+  and the expanded table list the FUT map's main and secondary keywords only
+  when they had impressions in the period, with the count (keyword plus
+  variants); the rest show as "без показов: N" with the list on hover. The
+  key map column sorts by those impressions.
 - **"My other sites" covers 7 days instead of 28.** A site could have ranked
   and dropped out; the other sites' position and impressions now come from
   the last 7 days.

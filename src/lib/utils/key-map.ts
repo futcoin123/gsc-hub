@@ -58,19 +58,6 @@ export function mapGeo(country: string): string {
   return COUNTRY[MAP_COUNTRY[country] ?? ''] ?? country;
 }
 
-/**
- * Коротко для строки сайта: главные ключи (у каждого — страна и папка, нужны,
- * когда главных несколько: сайт с языковыми папками) и сколько второстепенных.
- */
-export function mapSummary(pages: MapPage[]): { main: { key: string; geo: string; cc: string; url: string }[]; secondary: number } {
-  const main: { key: string; geo: string; cc: string; url: string }[] = [];
-  for (const p of pages) {
-    if (p.role !== 'main' || main.some((m) => m.key === p.key && m.url === p.url)) continue;
-    main.push({ key: p.key, geo: mapGeo(p.country), cc: p.country, url: p.url });
-  }
-  return { main, secondary: pages.filter((p) => p.role === 'secondary').length };
-}
-
 /** Подпись главного ключа: у сайта с несколькими главными — с коротким кодом страны: «fifa coins (NL)». */
 export const mainLabel = (m: { key: string; cc: string }, many: boolean) => (many ? `${m.key} (${m.cc})` : m.key);
 
@@ -123,4 +110,48 @@ export function geoKeywords(map: Map<string, MapPage[]>, topics: Record<string, 
     out[geo] = keys;
   }
   return out;
+}
+
+export interface MapKeyStat {
+  key: string;
+  role: KeyRole;
+  url: string;
+  cc: string;
+  geo: string;
+  /** Показы за период: сам ключ карты и его варианты (тот же запрос для Google). */
+  impressions: number;
+}
+
+/**
+ * Ключи карты сайта с показами за период (просьба владелицы 14.11.2026:
+ * главный и второстепенные — только те, у которых есть показы, и сколько).
+ * Показы запроса идут ключу карты, которому запрос соответствует (keyMarker:
+ * та же фраза, её вариант или те же слова). quiet — ключи карты без показов.
+ */
+export function mapImpressions(pages: MapPage[], queries: { query: string; impressions: number }[]): { main: MapKeyStat[]; secondary: MapKeyStat[]; quiet: MapKeyStat[] } {
+  const stats = new Map<MapPage, MapKeyStat>();
+  for (const p of pages) stats.set(p, { key: p.key, role: p.role, url: p.url, cc: p.country, geo: mapGeo(p.country), impressions: 0 });
+  const mark = keyMarker(pages);
+  for (const q of queries) {
+    const m = mark(q.query);
+    if (m && q.impressions > 0) stats.get(m.page)!.impressions += q.impressions;
+  }
+  // Один ключ на нескольких страницах карты (одна страна) — одна строка.
+  const uniq = (list: MapKeyStat[]) => {
+    const seen = new Map<string, MapKeyStat>();
+    for (const s of list) {
+      const k = `${s.role}\n${s.key}\n${s.cc}`;
+      const cur = seen.get(k);
+      if (!cur) seen.set(k, { ...s });
+      else cur.impressions += s.impressions;
+    }
+    return [...seen.values()];
+  };
+  const all = uniq([...stats.values()]);
+  const byImpr = (a: MapKeyStat, b: MapKeyStat) => b.impressions - a.impressions || a.key.localeCompare(b.key);
+  return {
+    main: all.filter((s) => s.role === 'main' && s.impressions > 0).sort(byImpr),
+    secondary: all.filter((s) => s.role === 'secondary' && s.impressions > 0).sort(byImpr),
+    quiet: all.filter((s) => s.impressions === 0)
+  };
 }
