@@ -168,6 +168,20 @@
     ro.observe(el);
     return () => ro.disconnect();
   });
+  // Стрелка «наверх» (просьба владелицы 17.11.2026): появляется, когда страницу
+  // прокрутили больше чем на экран, и плавно поднимает к началу.
+  let showTop = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const on = () => (showTop = window.scrollY > window.innerHeight * 0.8);
+    on();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  });
+  function toTop() {
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: still ? 'auto' : 'smooth' });
+  }
   // Названия колонок всех таблиц прилипают под шапкой при прокрутке.
   const signedIn = $derived(!!data?.user);
   $effect(() => {
@@ -261,6 +275,12 @@
 
 {@render children()}
 
+{#if signedIn && showTop}
+  <button type="button" class="to-top" onclick={toTop} title="Наверх" aria-label="Прокрутить наверх">
+    <svg viewBox="0 0 16 16" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" /></svg>
+  </button>
+{/if}
+
 <footer class="app-footer">
   <span>© 2026 gsc-hub</span>
   {#if version}
@@ -285,6 +305,31 @@
 </footer>
 
 <style>
+  .to-top {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    border: 1px solid rgb(var(--line));
+    background: rgb(var(--pane));
+    color: rgb(var(--ink-2));
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.15);
+    transition: background-color 150ms, color 150ms;
+  }
+  .to-top:hover {
+    background: rgb(var(--acc));
+    border-color: rgb(var(--acc));
+    color: white;
+  }
+  @media print {
+    .to-top { display: none; }
+  }
   .nav-link {
     display: inline-flex;
     align-items: center;

@@ -11,6 +11,7 @@ import { seedSiteLabels, siteLabels, autoLabel } from '$lib/server/site-labels';
 import { manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
 import { counterOnlyHosts } from '$lib/server/own-sites';
 import { labelKey } from '$lib/utils/site-label';
+import { sourceOf } from '$lib/utils/traffic-source';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
@@ -39,8 +40,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // Нажатия кнопки оплаты (переход на партнёрку) по доменам за тот же период —
   // счётчик хаба на сайтах.
   const payByHost: Record<string, number> = {};
+  // Входы на сайт по счётчику (просьба владелицы 17.11.2026): ext — из Google,
+  // Bing, других поисковиков, ИИ и с других сайтов; direct — прямые заходы.
+  const inByHost: Record<string, { ext: number; direct: number }> = {};
   for (const r of clicksForRange(db(), period.startDate, period.endDate)) {
     if (r.kind === 'submit') payByHost[r.host] = (payByHost[r.host] ?? 0) + r.n;
+    if (r.kind !== 'view') continue;
+    const src = sourceOf(r.target);
+    if (!src) continue;
+    const e = (inByHost[r.host] ??= { ext: 0, direct: 0 });
+    if (src.group === 'direct') e.direct += r.n;
+    else e.ext += r.n;
   }
   const hostOf = (u: string) => {
     try {
@@ -50,7 +60,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
   };
   const pay: Record<string, number> = {};
-  for (const st of sites) pay[st.siteUrl] = payByHost[hostOf(st.siteUrl)] ?? 0;
+  const visits: Record<string, { ext: number; direct: number }> = {};
+  for (const st of sites) {
+    pay[st.siteUrl] = payByHost[hostOf(st.siteUrl)] ?? 0;
+    visits[st.siteUrl] = inByHost[hostOf(st.siteUrl)] ?? { ext: 0, direct: 0 };
+  }
   // Итого по доменам: у домена может быть две property — не считаем дважды.
   const payTotal = [...new Set(sites.map((st) => hostOf(st.siteUrl)))].reduce((a, h) => a + (payByHost[h] ?? 0), 0);
   // «Карта ключей FUT»: главный ключ сайта и до 3 продающих второстепенных с
@@ -71,5 +85,5 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   }
   // Новым сайтам — метка по теме (сайт монет FUT — «futcoin»), если её ещё не ставили.
   autoLabel(db(), sites.map((st) => st.siteUrl));
-  return { period, sites, errors, pay, payTotal, keyMap, keyMapSites: all.size, labels: siteLabels(db()) };
+  return { period, sites, errors, pay, payTotal, visits, keyMap, keyMapSites: all.size, labels: siteLabels(db()) };
 };

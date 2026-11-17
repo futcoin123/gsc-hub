@@ -62,8 +62,8 @@
   }
   const display = (u: string) => u.replace(/^sc-domain:/, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 
-  type K = 'site' | 'account' | 'lang' | 'geo' | 'map' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'pay' | 'group';
-  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay', 'group']);
+  type K = 'site' | 'account' | 'lang' | 'geo' | 'map' | 'impressions' | 'clicks' | 'ctr' | 'position' | 'visits' | 'direct' | 'pay' | 'group';
+  const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'visits', 'direct', 'pay', 'group']);
   const sites = $derived(
     sort.apply(
       data.sites.filter((s) => (!search.trim() || s.siteUrl.toLowerCase().includes(search.trim().toLowerCase())) && (!hideEmpty || s.impressions > 0 || s.manual)),
@@ -73,6 +73,8 @@
         : k === 'lang' ? (locale[s.siteUrl]?.languages.join(', ') || null)
         : k === 'geo' ? (locale[s.siteUrl]?.geos.join(', ') || null)
         : k === 'map' ? (data.keyMap[s.siteUrl]?.main[0]?.key ?? null)
+        : k === 'visits' ? (data.visits[s.siteUrl]?.ext ?? 0)
+        : k === 'direct' ? (data.visits[s.siteUrl]?.direct ?? 0)
         : k === 'pay' ? (data.pay[s.siteUrl] ?? 0)
         : k === 'group' ? (siteInTarget(s.siteUrl) ? 'z' : (pastGroupsOf(s.siteUrl)[0]?.date ?? null))
         : s[k]
@@ -121,11 +123,12 @@
               <SortTh {sort} k="clicks" label="Clicks" num />
               <SortTh {sort} k="ctr" label="CTR" num />
               <SortTh {sort} k="position" label="Avg Pos" num />
+              <SortTh {sort} k="visits" label="Входы" num title="Пришли на сайт по счётчику на сайте за тот же период: из Google, Bing, других поисковиков, ИИ и с других сайтов. Прямые заходы — в соседней колонке" />
+              <SortTh {sort} k="direct" label="Прямые" num title="Прямые заходы по счётчику: набрали адрес, закладка, приложение, мессенджер — без адреса, откуда пришли" />
               <SortTh {sort} k="pay" label="К оплате" num title="Перешли к оплате: нажатия кнопки оплаты — переходы на партнёрку за тот же период, по счётчику хаба на сайте" />
               <SortTh {sort} k="group" label="В группу" title="Кнопка + добавляет сайт в группу, выбранную над таблицей («Сайты в группу»). Рядом — прошлые закупки сайта. Сортировка: сначала сайты этой группы, потом по последней закупке" />
               <SortTh {sort} k="lang" label="Язык" title="Язык сайта — как указан на его странице (у сайта с языковыми папками — все языки). Названия — как на бирже ссылок" />
               <SortTh {sort} k="geo" label="Гео" title="Страна сайта: из «Карты ключей FUT», иначе по зоне домена (.de, .co.uk), иначе Global. Названия — как на бирже ссылок" />
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -169,21 +172,16 @@
                   <td class="num app-num">{(s.ctr * 100).toFixed(1)}%</td>
                   <td class="num app-num">{s.position === null ? '—' : s.position.toFixed(1)}</td>
                 {/if}
+                <td class="num app-num {data.visits[s.siteUrl]?.ext ? 'font-semibold' : 'text-ink-4'}">{fmt(data.visits[s.siteUrl]?.ext ?? 0)}</td>
+                <td class="num app-num {data.visits[s.siteUrl]?.direct ? '' : 'text-ink-4'}">{fmt(data.visits[s.siteUrl]?.direct ?? 0)}</td>
                 <td class="num app-num {data.pay[s.siteUrl] ? 'font-semibold' : 'text-ink-4'}">{fmt(data.pay[s.siteUrl] ?? 0)}</td>
                 <td><SiteGroupCell siteUrl={s.siteUrl} /></td>
                 <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].languages.join(', ') || '—'}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
                 <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].geos.join(', ')}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
-                <td class="text-right">
-                  {#if s.manual}
-                    <a class="btn btn-ghost btn-sm" href="/clicks" onclick={(e) => e.stopPropagation()} title="«Кнопки»: просмотры, входы, нажатия и переходы к оплате по счётчику на сайте">Подробно</a>
-                  {:else}
-                    <a class="btn btn-ghost btn-sm" href="/properties/{encodeURIComponent(s.siteUrl)}?acc={encodeURIComponent(s.accountId)}" onclick={(e) => e.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">Подробно</a>
-                  {/if}
-                </td>
               </tr>
               {#if open.has(k)}
                 <tr class="bg-sunk hover:bg-sunk">
-                  <td colspan="12" class="px-3">
+                  <td colspan="13" class="px-3">
                     {#key data.period.key}
                       <SiteKeysTable siteUrl={s.siteUrl} accountId={s.accountId} period={data.period.key} siteTotals={s.error || s.manual ? null : { clicks: s.clicks, impressions: s.impressions }} />
                     {/key}

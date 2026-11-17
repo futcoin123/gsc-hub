@@ -8,6 +8,11 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Back-to-top arrow across the panel.** A round button in the bottom right
+  shows up after about a screen of scrolling and takes you back to the top.
+- **Site keys: "Входы" and "Прямые" columns before checkouts.** Counter visits
+  for the period from Google, Bing, other search engines, AI and other sites,
+  and direct visits separately; both sortable. The "Details" column is gone.
 - **Site indexing checked every 3 days, automatically.** The panel takes up to
   100 pages from each site's sitemap and inspects each in Search Console (URL
   Inspection API) on a timer, three sites at a time, each site every 3 days.
