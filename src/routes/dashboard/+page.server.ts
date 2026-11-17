@@ -12,7 +12,8 @@ import { compareWindow } from '$lib/utils/compare-window';
 import { userFavorites } from '$lib/server/user-selection';
 import { clicksForRange, viewsByDay } from '$lib/server/button-clicks';
 import { sourceOf } from '$lib/utils/traffic-source';
-import { manualOnlyHosts, manualPurchases, manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
+import { manualPurchases, manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
+import { counterOnlyHosts } from '$lib/server/own-sites';
 import { counterDays, type CounterDay } from '$lib/utils/counter-days';
 
 /** Входы на сайт по счётчику: g — из Google, остальные — не из Google и не прямые. */
@@ -96,10 +97,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     buys: buys.get(labelKey(e.siteUrl)) ?? []
   }));
 
-  // Сайты «Без консоли» (просьба владелицы 17.11.2026: на них тоже покупают
-  // ссылки — видеть прогресс): цифр Google нет, прогресс — по счётчику на сайте,
-  // график по раскрытию — входы по дням.
-  const manualHosts = manualOnlyHosts(db(), entries.map((e) => labelKey(e.siteUrl)));
+  // Свои сайты со счётчиком, которых ещё нет в Search Console (просьба
+  // владелицы 17.11.2026: на них покупают ссылки — видеть прогресс): цифр Google
+  // нет, прогресс — по счётчику на сайте, график по раскрытию — входы по дням.
+  const manualHosts = await counterOnlyHosts(db(), entries.map((e) => labelKey(e.siteUrl)));
   if (manualHosts.length) {
     const cur = counterDays(viewsByDay(db(), period.startDate, period.endDate), manualHosts, period.startDate, period.endDate);
     const prev = counterDays(viewsByDay(db(), prevWin.startDate, prevWin.endDate), manualHosts, prevWin.startDate, prevWin.endDate);

@@ -189,7 +189,7 @@
   const fmt = (n: number) => nf.format(Math.round(n));
   const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt(Math.abs(n))}`;
   function siteDetailHref(e: Entry) {
-    if (e.manual) return '/manual-sites';
+    if (e.manual) return '/clicks';
     return `/properties/${encodeURIComponent(e.siteUrl)}?acc=${encodeURIComponent(e.accountId)}`;
   }
 
@@ -292,7 +292,7 @@
     <td class="font-semibold text-ink">
       <span class="flex items-center gap-1.5">
         {#if canOpen}<svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {isOpen ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>{/if}
-        <a class="pii hover:text-acc hover:underline" href={siteDetailHref(e)} onclick={(ev) => ev.stopPropagation()} title={e.manual ? 'Сайта нет в Search Console — раздел «Без консоли»' : 'Страница сайта в хабе: графики, страницы, ключи'}>{domain}</a>
+        <a class="pii hover:text-acc hover:underline" href={siteDetailHref(e)} onclick={(ev) => ev.stopPropagation()} title={e.manual ? 'Сайта нет в Search Console — данные счётчика на сайте: «Кнопки»' : 'Страница сайта в хабе: графики, страницы, ключи'}>{domain}</a>
         <span onclick={(ev) => ev.stopPropagation()} role="presentation"><SiteLabel site={e.siteUrl} /></span>
         <a class="inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(e.siteUrl)} target="_blank" rel="noopener noreferrer" title="Открыть сайт (в новой вкладке)" aria-label="Открыть сайт {domain}" onclick={(ev) => ev.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
       </span>

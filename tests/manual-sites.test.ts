@@ -20,11 +20,11 @@ import {
   linkHistory,
   campaignCsv,
   linkText,
-  manualOnlyHosts,
   manualPurchases,
   manualSiteUrl
 } from '../src/lib/server/manual-sites';
 import { counterDays } from '../src/lib/utils/counter-days';
+import { hostsWithoutConsole } from '../src/lib/server/own-sites';
 
 describe('сайты без консоли', () => {
   let dir: string;
@@ -148,9 +148,8 @@ describe('сайты без консоли', () => {
     expect(rows[2]).toBe('12-11-26;2026-11-12;coins-shop.de;Безанкор (домен);https://coins-shop.de/;coins-shop.de;1;;');
   });
 
-  it('в общих таблицах: только сайты, которых нет в консолях; купленное — из зафиксированных кампаний', () => {
-    addManualSites(db, 'coins-shop.de\nfutcoin.es');
-    expect(manualOnlyHosts(db, ['www.futcoin.es', 'fut-coins.de'])).toEqual(['coins-shop.de']);
+  it('купленное кампаниями — из зафиксированных, по кампании и сайту', () => {
+    addManualSites(db, 'coins-shop.de');
     expect(manualSiteUrl('coins-shop.de')).toBe('https://coins-shop.de/');
     const open = createCampaign(db, '2026-11-15');
     const done = createCampaign(db, '2026-11-12');
@@ -159,6 +158,12 @@ describe('сайты без консоли', () => {
     addLink(db, done, { host: 'coins-shop.de', type: 'url', page: '/preise/', qty: 2 });
     setCampaignFixed(db, done, true);
     expect(manualPurchases(db)).toEqual([{ campaignId: done, name: '12-11-26', date: '2026-11-12', host: 'coins-shop.de', qty: 7, anchors: ['fut coins', 'безанкор'] }]);
+  });
+});
+
+describe('свои сайты со счётчиком без консоли', () => {
+  it('сайты со счётчиком минус сайты консолей; технические адреса — нет', () => {
+    expect(hostsWithoutConsole(['fc-coins.net', 'www.FutCoin.ES', 'futcoin.es', 'getfccoins.com', 'x.pages.dev', 'localhost', '127.0.0.1'], ['futcoin.es', 'getfccoins.com'])).toEqual(['fc-coins.net']);
   });
 });
 

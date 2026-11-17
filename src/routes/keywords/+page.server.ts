@@ -8,7 +8,8 @@ import { siteHostname } from '$lib/utils/url-filters';
 import { keyMapAll, keyMapHeadline } from '$lib/server/key-map';
 import { mapSummary } from '$lib/utils/key-map';
 import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
-import { manualOnlyHosts, manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
+import { manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
+import { counterOnlyHosts } from '$lib/server/own-sites';
 import { labelKey } from '$lib/utils/site-label';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -16,12 +17,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const period = reportPeriod(db());
   await seedSiteLabels(db());
   const { sites: gscSites, errors } = await sitesForPeriod(db(), period);
-  // Сайты «Без консоли» — тоже здесь (просьба владелицы 17.11.2026: на них
-  // покупают ссылки): ключи карты, переходы к оплате, «В группу», «Свой ключ».
-  // Цифр Google у них нет.
+  // Свои сайты со счётчиком, которых ещё нет в Search Console, — тоже здесь
+  // (просьба владелицы 17.11.2026: на них покупают ссылки): ключи карты,
+  // переходы к оплате, «В группу», «Свой ключ». Цифр Google у них нет.
+  const ownHosts = await counterOnlyHosts(db(), gscSites.map((st) => labelKey(st.siteUrl)));
   const sites = [
     ...gscSites.map((st) => ({ ...st, manual: false })),
-    ...manualOnlyHosts(db(), gscSites.map((st) => labelKey(st.siteUrl))).map((h) => ({
+    ...ownHosts.map((h) => ({
       siteUrl: manualSiteUrl(h),
       accountId: MANUAL_ACCOUNT,
       accountEmail: '',

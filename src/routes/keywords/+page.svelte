@@ -138,7 +138,7 @@
                     <a class="ml-0.5 inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(s.siteUrl)} target="_blank" rel="noopener noreferrer" title="Перейти на сайт (в новой вкладке)" aria-label="Перейти на сайт {display(s.siteUrl)}" onclick={(e) => e.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
                   </span>
                 </td>
-                <td class="pii text-xs text-ink-3">{#if s.manual}<a class="text-ink-3 hover:text-acc hover:underline" href="/manual-sites" onclick={(e) => e.stopPropagation()} title="Сайта нет в Search Console — он из раздела «Без консоли». Ключи для закупки — в строке «Свой ключ» (раскройте сайт)">без консоли</a>{:else}{s.accountLabel ?? s.accountEmail}{/if}</td>
+                <td class="pii text-xs text-ink-3">{#if s.manual}<span title="Ваш сайт со счётчиком, которого ещё нет в Search Console: цифр Google нет, переходы к оплате — по счётчику. Ключи для закупки — в строке «Свой ключ» (раскройте сайт)">без консоли</span>{:else}{s.accountLabel ?? s.accountEmail}{/if}</td>
                 <!-- Ключи карты копируют — нажатие здесь строку не сворачивает. -->
                 <td class="max-w-[22rem] cursor-text text-xs" onclick={(e) => e.stopPropagation()}>
                   {#if km}
@@ -171,7 +171,7 @@
                 <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].geos.join(', ')}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
                 <td class="text-right">
                   {#if s.manual}
-                    <a class="btn btn-ghost btn-sm" href="/manual-sites" onclick={(e) => e.stopPropagation()} title="Раздел «Без консоли»: сайты, кампании и история закупок">Подробно</a>
+                    <a class="btn btn-ghost btn-sm" href="/clicks" onclick={(e) => e.stopPropagation()} title="«Кнопки»: просмотры, входы, нажатия и переходы к оплате по счётчику на сайте">Подробно</a>
                   {:else}
                     <a class="btn btn-ghost btn-sm" href="/properties/{encodeURIComponent(s.siteUrl)}?acc={encodeURIComponent(s.accountId)}" onclick={(e) => e.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">Подробно</a>
                   {/if}

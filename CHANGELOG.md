@@ -75,13 +75,16 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
-- **Sites without a console in Site keys and Dashboard.** Site keys lists them
-  with the key map, checkouts, "To group" and language/geo; expanded, the
-  "Own key" row adds keys and pages to the regular groups. Dashboard shows,
-  instead of Google figures, the counter's visits from Google with the change
-  against the previous period, visits from elsewhere and purchases (groups and
-  no-console campaigns); expanding a row draws the daily visits. Once a site is
-  added to Search Console it shows up as a console site, in one row.
+- **Own sites without Search Console in Site keys and Dashboard.** These are
+  the sites with the unified counter (the panel got events or a link check
+  from them) that are in no console - fc-coins.net and the other new ones.
+  Sites of the "No console" section are not included: they have no counter.
+  Site keys lists them with the key map, checkouts, "To group" and
+  language/geo; expanded, the "Own key" row adds keys and pages to the regular
+  groups. Dashboard shows, instead of Google figures, the counter's visits from
+  Google with the change against the previous period, visits from elsewhere
+  and purchases; expanding a row draws the daily visits. Once a site is added
+  to Search Console it shows up as a console site, in one row.
 - **A row no longer collapses when text is copied from it.** Selecting a
   keyword or a site name with the mouse or a double click leaves an expanded
   row open (Site keys, Buttons, Dashboard, Sites). A click in the "Key map"

@@ -2,9 +2,10 @@
 // Домены вписываются руками, закупки идут кампаниями по датам, ключи и
 // страницы — тоже руками. Кампанию фиксируют, когда ссылки куплены: из
 // зафиксированных складывается история «что и когда куплено».
-// С 17.11.2026 (просьба владелицы) эти сайты стоят и в «Ключах сайтов», и в
-// Dashboard вместе с сайтами консолей: ключи для них берут в обычные группы,
-// прогресс виден по счётчику на сайте (manualOnlyHosts, manualPurchases).
+// С группами сайтов консолей (site_groups) таблицы не пересекаются. В «Ключах
+// сайтов» и Dashboard сайты этого раздела не стоят (счётчика на них нет; там —
+// свои сайты со счётчиком без консоли, own-sites.ts); купленное кампаниями
+// видно в колонке закупок Dashboard (manualPurchases).
 import type { Db } from './db';
 import { parseHostList, normalizeHost } from './site-groups';
 import { csvCell } from './group-items';
@@ -104,19 +105,10 @@ export function removeManualSite(db: Db, host: string): void {
 
 // ─── В общих таблицах («Ключи сайтов», Dashboard) ─────────────────────────
 
-/** Сайт без консоли в таблицах сайтов: вместо консоли — эта метка. */
+/** Свой сайт без консоли в таблицах сайтов (own-sites.ts): вместо консоли — эта метка. */
 export const MANUAL_ACCOUNT = 'manual';
 /** Адрес сайта без консоли в таблицах и группах — как property «Префикс URL». */
 export const manualSiteUrl = (host: string) => `https://${host}/`;
-
-/**
- * Сайты «Без консоли», которых нет среди сайтов консолей (сайт добавили в
- * Search Console — его строка уже есть, вторая не нужна).
- */
-export function manualOnlyHosts(db: Db, consoleHosts: Iterable<string>): string[] {
-  const have = new Set([...consoleHosts].map((h) => normalizeHost(h)));
-  return listManualSites(db).map((s) => s.host).filter((h) => !have.has(h));
-}
 
 /** Купленные ссылки из зафиксированных кампаний «Без консоли»: по кампании и сайту. */
 export function manualPurchases(db: Db): { campaignId: number; name: string; date: string; host: string; qty: number; anchors: string[] }[] {

@@ -9,6 +9,7 @@
 import type { Db } from './db';
 import { getAccount } from './accounts';
 import { labelKey } from '$lib/utils/site-label';
+import { countedHosts } from './button-clicks';
 import { listAllKnownSites, searchAnalyticsQuery, type SearchAnalyticsRow } from './google';
 import { addCalendarDays, dateSpan, gscToday, latestCompleteDay } from './gsc-calendar';
 import type { GroupPurchase } from './link-purchases';
@@ -121,9 +122,9 @@ export async function purchaseEffect(db: Db, p: GroupPurchase, now = Date.now(),
       });
       const acc = getAccount(db, accOf.get(siteUrl) ?? '');
       if (!acc) {
-        // Сайт из «Без консоли»: Google его не показывает, прогресс — по счётчику на Dashboard.
-        const manual = db.prepare('SELECT 1 FROM manual_sites WHERE host = ?').get(labelKey(siteUrl));
-        return base(manual ? 'сайта нет в Search Console (раздел «Без консоли») — прогресс по счётчику на сайте виден на Dashboard' : 'сайт не найден ни в одной консоли');
+        // Свой сайт со счётчиком без консоли: прогресс — по счётчику на Dashboard.
+        const counted = countedHosts(db).has(labelKey(siteUrl));
+        return base(counted ? 'сайта нет в Search Console — прогресс по счётчику на сайте виден на Dashboard' : 'сайт не найден ни в одной консоли');
       }
       try {
         // Анкор считаем на той странице, куда ведёт ссылка: один и тот же
