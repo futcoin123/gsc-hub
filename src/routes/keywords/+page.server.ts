@@ -7,7 +7,7 @@ import { clicksForRange, normHost } from '$lib/server/button-clicks';
 import { siteHostname } from '$lib/utils/url-filters';
 import { keyMapAll, keyMapHeadline } from '$lib/server/key-map';
 import { mapSummary } from '$lib/utils/key-map';
-import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
+import { seedSiteLabels, siteLabels, autoLabel } from '$lib/server/site-labels';
 import { manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
 import { counterOnlyHosts } from '$lib/server/own-sites';
 import { labelKey } from '$lib/utils/site-label';
@@ -68,5 +68,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const keys = headline.get(hostOf(st.siteUrl));
     keyMap[st.siteUrl] = keys ? mapSummary(keys) : null;
   }
+  // Новым сайтам — метка по теме (сайт монет FUT — «futcoin»), если её ещё не ставили.
+  autoLabel(db(), sites.map((st) => st.siteUrl));
   return { period, sites, errors, pay, payTotal, keyMap, keyMapSites: all.size, labels: siteLabels(db()) };
 };

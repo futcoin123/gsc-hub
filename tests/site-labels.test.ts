@@ -8,7 +8,7 @@ import { openDb, type Db } from '../src/lib/server/db';
 vi.mock('../src/lib/server/google', () => ({
   listAllKnownSites: async () => ({ sites: [{ siteUrl: 'sc-domain:futcoin.it' }, { siteUrl: 'https://www.fccoins.es/' }], errors: [] })
 }));
-import { seedSiteLabels, siteLabels, setSiteLabel, cleanLabel, labelAll } from '../src/lib/server/site-labels';
+import { seedSiteLabels, siteLabels, setSiteLabel, cleanLabel, labelAll, autoLabel, topicLabel } from '../src/lib/server/site-labels';
 import { labelKey, blockCompare } from '../src/lib/utils/site-label';
 
 let db: Db;
@@ -48,6 +48,25 @@ describe('метки сайтов', () => {
     expect(siteLabels(db)['fccoins.es']).toBeUndefined();
     expect(cleanLabel('x'.repeat(60))).toHaveLength(40);
     expect(labelAll(db, ['a.com', 'www.a.com'])).toBe(1);
+  });
+
+  it('новым сайтам — метка по теме: монеты FUT — futcoin, остальным — нет', () => {
+    expect(topicLabel('fc-coins.net', new Set())).toBe('futcoin');
+    expect(topicLabel('getfccoins.com', new Set())).toBe('futcoin');
+    expect(topicLabel('600kcoins.com', new Set())).toBe('futcoin');
+    expect(topicLabel('utcoinsforsale.com', new Set())).toBe('futcoin');
+    expect(topicLabel('monety-fc.pl', new Set())).toBe('futcoin');
+    expect(topicLabel('wowgold.co.uk', new Set())).toBeNull();
+    expect(topicLabel('some-shop.de', new Set(['some-shop.de']))).toBe('futcoin');
+    expect(autoLabel(db, ['https://fc-coins.net/', 'sc-domain:wowgold.co.uk'])).toBe(1);
+    expect(siteLabels(db)).toEqual({ 'fc-coins.net': 'futcoin' });
+  });
+
+  it('метка по теме не возвращается, если её сняли руками, и не меняет поставленную', () => {
+    setSiteLabel(db, 'getfccoins.com', '');
+    setSiteLabel(db, 'fccoinsnow.com', 'wow');
+    expect(autoLabel(db, ['getfccoins.com', 'fccoinsnow.com'])).toBe(0);
+    expect(siteLabels(db)).toEqual({ 'fccoinsnow.com': 'wow' });
   });
 
   it('порядок блоков: метка, потом страна; без метки и без страны — в конце', () => {

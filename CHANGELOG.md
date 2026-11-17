@@ -75,6 +75,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **A new site gets its label by topic right away.** A FUT coins site (in the
+  key map, or a domain about fut, fifa, fc coins, ut coins…) is labelled
+  "futcoin" as soon as it shows up in Site keys, Dashboard or groups. A label
+  removed or changed by hand is left alone.
 - **Site keys: narrow "Console" column, "Checkouts" header shortened.** The
   console shows its first letters (full on hover), a site without a console
   shows "нет"; the room goes to the "Key map" column so keywords fit on one or

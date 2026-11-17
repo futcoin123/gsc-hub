@@ -1,6 +1,8 @@
 // Метки сайтов: к какому проекту относится сайт (решение владелицы 13.11.2026:
 // все сайты, что есть в панели сейчас, — «futcoin»; новые будут с другой
 // меткой). Метка стоит у сайта в «Ключах сайтов» и «Группах», уходит в ТЗ (CSV).
+// С 17.11.2026 (просьба владелицы: «метку сразу ставь по теме») новый сайт
+// получает метку сам, если тема видна: сайт монет FUT — «futcoin» (autoLabel).
 import type { Db } from './db';
 import { listAllKnownSites } from './google';
 import { labelKey } from '$lib/utils/site-label';
@@ -29,6 +31,8 @@ export function siteLabels(db: Db): Record<string, string> {
 export function setSiteLabel(db: Db, hostOrUrl: string, label: unknown, now = Date.now()): void {
   const host = labelHost(hostOrUrl);
   if (!host) throw new Error('нет сайта');
+  // Метку поставили или сняли руками — сама панель её больше не трогает.
+  db.prepare('INSERT OR IGNORE INTO site_labels_seen (host) VALUES (?)').run(host);
   const l = cleanLabel(label);
   if (l === null) db.prepare('DELETE FROM site_labels WHERE host = ?').run(host);
   else db.prepare('INSERT INTO site_labels (host, label, set_at) VALUES (?, ?, ?) ON CONFLICT(host) DO UPDATE SET label = excluded.label, set_at = excluded.set_at').run(host, l, now);
@@ -42,6 +46,43 @@ export function labelAll(db: Db, hosts: Iterable<string>, label = FIRST_LABEL, n
   return n;
 }
 
+/** Сайт монет FUT по имени домена: fut, fifa, fc coins, ut coins, crediti, monety… */
+const FUT_DOMAIN = /fut|fifa|fc-?coin|coins?-?fc|fc-?2\d|utcoin|ut-coin|crediti|creditfut|monety|\d+k-?coins/;
+
+/** Метка по теме сайта: в «Карте ключей FUT» или домен про монеты FUT — «futcoin»; иначе не знаем. */
+export function topicLabel(host: string, futHosts: Set<string>): string | null {
+  const h = labelHost(host);
+  return futHosts.has(h) || FUT_DOMAIN.test(h) ? FIRST_LABEL : null;
+}
+
+/**
+ * Новым сайтам — метку по теме (просьба владелицы 17.11.2026). Только сайтам,
+ * которым метку ещё не ставили: снятая владелицей метка не возвращается.
+ */
+export function autoLabel(db: Db, hosts: Iterable<string>, now = Date.now()): number {
+  const labeled = new Set(Object.keys(siteLabels(db)));
+  const seen = new Set((db.prepare('SELECT host FROM site_labels_seen').all() as { host: string }[]).map((r) => r.host));
+  let fut: Set<string> | null = null;
+  const ins = db.prepare('INSERT OR IGNORE INTO site_labels (host, label, set_at) VALUES (?, ?, ?)');
+  const mark = db.prepare('INSERT OR IGNORE INTO site_labels_seen (host) VALUES (?)');
+  let n = 0;
+  for (const h of new Set([...hosts].map(labelHost).filter(Boolean))) {
+    if (labeled.has(h) || seen.has(h)) continue;
+    if (!fut) {
+      try {
+        fut = new Set(keyMapAll(db).keys());
+      } catch {
+        fut = new Set();
+      }
+    }
+    const label = topicLabel(h, fut);
+    if (!label) continue;
+    n += ins.run(h, label, now).changes;
+    mark.run(h);
+  }
+  return n;
+}
+
 /** Сайты, которые панель знает без Google: группы, закупки, «Без консоли», счётчик. */
 function storedHosts(db: Db): string[] {
   const q = (sql: string) => (db.prepare(sql).all() as { h: string }[]).map((r) => r.h);
@@ -51,6 +92,11 @@ function storedHosts(db: Db): string[] {
     ...q('SELECT host AS h FROM manual_sites'),
     ...q('SELECT DISTINCT host AS h FROM button_clicks')
   ];
+}
+
+/** Метка по теме всем сайтам, которые панель знает сама (группы, закупки, счётчик). */
+export function autoLabelKnown(db: Db, now = Date.now()): number {
+  return autoLabel(db, storedHosts(db), now);
 }
 
 /**

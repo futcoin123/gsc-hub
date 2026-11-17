@@ -445,6 +445,11 @@ CREATE TABLE IF NOT EXISTS site_labels (
   label  TEXT NOT NULL,
   set_at INTEGER NOT NULL
 );
+-- Сайты, которым метку уже ставили (сама панель по теме или владелица руками):
+-- снятая владелицей метка сама больше не возвращается.
+CREATE TABLE IF NOT EXISTS site_labels_seen (
+  host TEXT PRIMARY KEY
+);
 
 -- Раздел «Без консоли»: свои сайты, которых нет в Search Console, и закупки
 -- ссылок на них по датам. Отдельно от групп сайтов консолей (site_groups):

@@ -5,7 +5,7 @@ import { fetchDailyBreakdown } from '$lib/server/google';
 import { requireAdmin } from '$lib/server/guard';
 import { listSiteEvents, hostOfSite, toChartEvents } from '$lib/server/site-events';
 import { listGroupPurchases } from '$lib/server/link-purchases';
-import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
+import { seedSiteLabels, siteLabels, autoLabel } from '$lib/server/site-labels';
 import { labelKey } from '$lib/utils/site-label';
 import { addCalendarDays } from '$lib/server/gsc-calendar';
 import { compareWindow } from '$lib/utils/compare-window';
@@ -127,6 +127,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     }
   }
 
+  autoLabel(db(), rows.map((r) => r.siteUrl));
   return { entries: rows, errors, days, comparable, cmp: { key: cmp.key, start: cmp.window?.startDate ?? null, end: cmp.window?.endDate ?? null }, labels: siteLabels(db()), favorites: userFavorites(db()) };
 };
 
