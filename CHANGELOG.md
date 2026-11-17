@@ -87,6 +87,9 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Buttons: a site with a passed link check and no visitors is no longer
+  marked "events dropped".** It now reads "связь есть, посетителей ещё не
+  было"; a failed link check reads "ключ сайта не подходит".
 - **Site keys: the expanded site lists all keywords at once.** The table used
   to show the first 300 rows by impressions, so low-impression keywords, even
   ones with clicks, hid behind "Show more". All rows (up to 5000) now show.
