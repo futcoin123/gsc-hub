@@ -69,6 +69,8 @@
   type Pt = { date: string; clicks: number; impressions: number; position: number | null };
   type Ev = { date: string; label: string; color: string };
   const multiDay = $derived(period !== 'today' && period !== 'yesterday');
+  // Сайт «Без консоли»: ключей и графиков Google нет — карта ключей, переходы к оплате и «Свой ключ».
+  const manual = $derived(accountId === 'manual');
   let siteChart = $state<{ loading: boolean; points: Pt[]; events: Ev[]; err: string | null }>({ loading: false, points: [], events: [], err: null });
   let showSiteChart = $state(true);
   let kwOpen = $state<string | null>(null);
@@ -80,7 +82,7 @@
     return { points: j.points ?? [], events: j.events ?? [] };
   }
   async function loadSiteChart() {
-    if (!multiDay) return;
+    if (!multiDay || manual) return;
     siteChart = { loading: true, points: [], events: [], err: null };
     try {
       siteChart = { loading: false, ...(await fetchDaily('')), err: null };
@@ -166,6 +168,7 @@
     } finally {
       loading = false;
     }
+    if (manual) return;
     const queries = [...new Set(rows.map((r) => r.query))].sort();
     vols.load(siteUrl, queries);
     otherLoading = true;
@@ -243,6 +246,9 @@
 </script>
 
 <div class="py-2">
+  {#if manual}
+    <p class="mb-2 text-xs text-ink-2">Сайта нет в Search Console — ключей, показов и позиций Google нет. {#if !loading && !err}Перешли к оплате на сайте за период: {fmt(checkoutTotal)}. {/if}Ключ и страницу для закупки впишите в строке «Свой ключ» — ключи карты подсказываются.</p>
+  {:else}
   <div class="mb-2 flex flex-wrap items-center gap-2 text-xs">
     <input class="input h-7 w-64 text-xs" placeholder="Ключ или страница содержит…" bind:value={search} aria-label="Поиск по ключам" />
     {#if pageOnly}<button type="button" class="badge badge-acc pii max-w-[22rem] truncate" title="Показаны только ключи этой страницы. Нажмите, чтобы показать все" onclick={() => (pageOnly = null)}>страница: {pathOf(pageOnly)} ×</button>{/if}
@@ -260,6 +266,7 @@
       {#if pickedQs.length}<button type="button" class="btn btn-ghost btn-sm" onclick={() => (picked = new Set())}>Снять отметки</button>{/if}
     {/if}
   </div>
+  {/if}
   {#if !loading && !err}
     {#if !keyMap}
       <p class="mb-1 text-xs text-ink-4">Сайта пока нет в «Карте ключей FUT» — пометок «главный» и «второстепенный» нет. Хаб ищет его в карте раз в 3 дня.</p>
@@ -329,7 +336,7 @@
     <CustomKeyRow {siteUrl} {keyMap} tableKeys={rowKeys} />
   {/if}
 
-  {#if multiDay}
+  {#if multiDay && !manual}
     <div class="mb-2 rounded border border-line bg-pane p-2">
       <button type="button" class="mb-1 flex items-center gap-1 text-xs font-semibold text-ink-2" onclick={() => (showSiteChart = !showSiteChart)}>
         <svg viewBox="0 0 16 16" class="h-3 w-3 transition-transform {showSiteChart ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
@@ -348,6 +355,8 @@
     <p class="loading text-xs">Загружаю ключи…</p>
   {:else if err}
     <p class="text-xs text-bad">Не загрузилось: {err} <button type="button" class="btn btn-ghost btn-sm" onclick={load}>Повторить</button></p>
+  {:else if manual}
+    <!-- без консоли таблицы ключей нет -->
   {:else if todayNoKeys}
     <p class="notice notice-warn text-xs">Ключи за сегодня Google пока не отдаёт. Итог сайта ({fmt(siteTotals?.clicks ?? 0)} кликов · {fmt(siteTotals?.impressions ?? 0)} показов) — из почасовых данных, как «24 часа» в Search Console; по каким ключам они пришли, Google покажет позже. Выберите в шапке «Вчера», чтобы увидеть ключи за прошлый день.</p>
   {:else if shown.length === 0}

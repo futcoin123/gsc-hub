@@ -447,8 +447,8 @@ CREATE TABLE IF NOT EXISTS site_labels (
 );
 
 -- Раздел «Без консоли»: свои сайты, которых нет в Search Console, и закупки
--- ссылок на них по датам. Отдельно от групп сайтов консолей (site_groups):
--- ни в «Группы», ни в «Закупки», ни в фильтр шапки не попадают.
+-- ссылок на них по датам. С 17.11.2026 эти сайты стоят и в «Ключах сайтов»
+-- и Dashboard: оттуда их ключи можно брать в обычные группы (site_groups).
 CREATE TABLE IF NOT EXISTS manual_sites (
   host     TEXT PRIMARY KEY,
   added_at INTEGER NOT NULL

@@ -19,8 +19,12 @@ import {
   removeLink,
   linkHistory,
   campaignCsv,
-  linkText
+  linkText,
+  manualOnlyHosts,
+  manualPurchases,
+  manualSiteUrl
 } from '../src/lib/server/manual-sites';
+import { counterDays } from '../src/lib/utils/counter-days';
 
 describe('сайты без консоли', () => {
   let dir: string;
@@ -142,5 +146,36 @@ describe('сайты без консоли', () => {
     expect(rows[0]).toBe('Кампания;Дата;Сайт;Тип;Страница;Анкор;Кол-во ссылок;Язык;Гео');
     expect(rows[1]).toBe("12-11-26;2026-11-12;coins-shop.de;Анкор;https://coins-shop.de/;'=fut coins;2;;");
     expect(rows[2]).toBe('12-11-26;2026-11-12;coins-shop.de;Безанкор (домен);https://coins-shop.de/;coins-shop.de;1;;');
+  });
+
+  it('в общих таблицах: только сайты, которых нет в консолях; купленное — из зафиксированных кампаний', () => {
+    addManualSites(db, 'coins-shop.de\nfutcoin.es');
+    expect(manualOnlyHosts(db, ['www.futcoin.es', 'fut-coins.de'])).toEqual(['coins-shop.de']);
+    expect(manualSiteUrl('coins-shop.de')).toBe('https://coins-shop.de/');
+    const open = createCampaign(db, '2026-11-15');
+    const done = createCampaign(db, '2026-11-12');
+    addLink(db, open, { host: 'coins-shop.de', type: 'anchor', anchor: 'fut coins', page: '/', qty: 3 });
+    addLink(db, done, { host: 'coins-shop.de', type: 'anchor', anchor: 'fut coins', page: '/', qty: 5 });
+    addLink(db, done, { host: 'coins-shop.de', type: 'url', page: '/preise/', qty: 2 });
+    setCampaignFixed(db, done, true);
+    expect(manualPurchases(db)).toEqual([{ campaignId: done, name: '12-11-26', date: '2026-11-12', host: 'coins-shop.de', qty: 7, anchors: ['fut coins', 'безанкор'] }]);
+  });
+});
+
+describe('входы по дням по счётчику (график сайта без консоли)', () => {
+  it('каждый день периода; Google отдельно, прямые и внутренние не считаются', () => {
+    const rows = [
+      { day: '2026-11-15', host: 'a.de', target: 'google.de', n: 3 },
+      { day: '2026-11-15', host: 'a.de', target: 'bing.com', n: 1 },
+      { day: '2026-11-15', host: 'a.de', target: '(direct)', n: 9 },
+      { day: '2026-11-15', host: 'a.de', target: '(internal)', n: 9 },
+      { day: '2026-11-17', host: 'a.de', target: 'chatgpt.com', n: 2 },
+      { day: '2026-11-16', host: 'b.de', target: 'google.com', n: 5 }
+    ];
+    expect(counterDays(rows, ['a.de'], '2026-11-15', '2026-11-17').get('a.de')).toEqual([
+      { date: '2026-11-15', g: 3, other: 1 },
+      { date: '2026-11-16', g: 0, other: 0 },
+      { date: '2026-11-17', g: 0, other: 2 }
+    ]);
   });
 });

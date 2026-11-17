@@ -91,6 +91,16 @@ export function clicksForRange(db: Db, startDate: string, endDate: string): Clic
     .all(startDate, endDate) as ClickRow[];
 }
 
+/** Просмотры по дням с источником (target просмотра — откуда пришли): для графика сайта по счётчику. */
+export function viewsByDay(db: Db, startDate: string, endDate: string): { day: string; host: string; target: string; n: number }[] {
+  return db
+    .prepare(
+      `SELECT day, host, target, SUM(n) AS n FROM button_clicks
+       WHERE kind = 'view' AND day >= ? AND day <= ? GROUP BY day, host, target ORDER BY day`
+    )
+    .all(startDate, endDate) as { day: string; host: string; target: string; n: number }[];
+}
+
 /**
  * Домены, от которых счётчик уже принимал события. Приём не должен зависеть
  * от того, ответил ли Google прямо сейчас: если консоль временно недоступна,

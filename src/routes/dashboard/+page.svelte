@@ -118,6 +118,8 @@
       // Входы не из Google и не прямые (счётчик на сайте): Bing, другие
       // поисковики, ИИ, другие сайты и соцсети — и их сумма с изменением.
       eg: e.ext.g,
+      dEg: e.ext.g - e.extPrev.g,
+      pEg: pct(e.ext.g, e.extPrev.g),
       eb: e.ext.b,
       es: e.ext.s,
       eai: e.ext.ai,
@@ -133,7 +135,7 @@
   type K = 'site' | 'clicks' | 'dClicks' | 'eg' | 'impr' | 'dImpr' | 'ctr' | 'pos' | 'dPos' | 'eb' | 'es' | 'eai' | 'eo' | 'ext' | 'buy';
   const sort = new TableSort<K>('clicks', -1, ['clicks', 'dClicks', 'eg', 'impr', 'dImpr', 'ctr', 'dPos', 'eb', 'es', 'eai', 'eo', 'ext', 'buy']);
   const sortValue = (e: Entry, k: K): string | number | null => {
-    if (e.error && !['site', 'buy', 'eg', 'eb', 'es', 'eai', 'eo', 'ext'].includes(k)) return null;
+    if ((e.error || e.manual) && !['site', 'buy', 'eg', 'eb', 'es', 'eai', 'eo', 'ext'].includes(k)) return null;
     if (k === 'site') return siteDomain(e.siteUrl);
     if (k === 'buy') return e.buys[0]?.date ?? null;
     return figures(e)[k];
@@ -187,6 +189,7 @@
   const fmt = (n: number) => nf.format(Math.round(n));
   const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt(Math.abs(n))}`;
   function siteDetailHref(e: Entry) {
+    if (e.manual) return '/manual-sites';
     return `/properties/${encodeURIComponent(e.siteUrl)}?acc=${encodeURIComponent(e.accountId)}`;
   }
 
@@ -221,6 +224,8 @@
     });
     return d.trim();
   }
+  /** Входы по счётчику в форме строки графика: клики — из Google, показы — не из Google. */
+  const asRow = (d: { date: string; g: number; other: number }): DailyRow => ({ date: d.date, clicks: d.g, impressions: d.other, ctr: 0, position: 0 });
   function eventX(rs: DailyRow[], date: string): number | null {
     if (!rs.length) return null;
     let i = rs.findIndex((r) => r.date >= date);
@@ -256,13 +261,13 @@
   {#if !last}
     <span class="text-ink-4">—</span>
   {:else}
-    <a class="whitespace-nowrap hover:text-acc hover:underline" href="/purchases?g={last.groupId}" title="Группа {last.name}: {last.anchors.join(', ')}. Нажмите — что изменилось после закупки">{fd(last.date)} · {last.qty} ссыл.</a>
+    <a class="whitespace-nowrap hover:text-acc hover:underline" href={last.href} title="{last.href.startsWith('/manual-sites') ? 'Кампания «Без консоли»' : 'Группа'} {last.name}: {last.anchors.join(', ')}. Нажмите — что изменилось после закупки">{fd(last.date)} · {last.qty} ссыл.</a>
     {#if e.buys.length > 1}
       <details class="relative inline-block">
         <summary class="ml-1 cursor-pointer list-none rounded bg-sunk px-1 text-[10px] text-ink-2" title="Все закупки ссылок на этот сайт">ещё {e.buys.length - 1}</summary>
         <ul class="absolute right-0 z-20 mt-1 min-w-[16rem] rounded border border-line bg-pane p-1 text-left shadow-lg">
-          {#each e.buys as b (b.groupId)}
-            <li><a class="block whitespace-nowrap rounded px-2 py-0.5 hover:bg-sunk" href="/purchases?g={b.groupId}" title={b.anchors.join(', ')}>{fd(b.date)} · {b.qty} ссыл. · {b.name}</a></li>
+          {#each e.buys as b (b.key)}
+            <li><a class="block whitespace-nowrap rounded px-2 py-0.5 hover:bg-sunk" href={b.href} title={b.anchors.join(', ')}>{fd(b.date)} · {b.qty} ссыл. · {b.name}</a></li>
           {/each}
         </ul>
       </details>
@@ -287,12 +292,17 @@
     <td class="font-semibold text-ink">
       <span class="flex items-center gap-1.5">
         {#if canOpen}<svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {isOpen ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>{/if}
-        <a class="pii hover:text-acc hover:underline" href={siteDetailHref(e)} onclick={(ev) => ev.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">{domain}</a>
+        <a class="pii hover:text-acc hover:underline" href={siteDetailHref(e)} onclick={(ev) => ev.stopPropagation()} title={e.manual ? 'Сайта нет в Search Console — раздел «Без консоли»' : 'Страница сайта в хабе: графики, страницы, ключи'}>{domain}</a>
         <span onclick={(ev) => ev.stopPropagation()} role="presentation"><SiteLabel site={e.siteUrl} /></span>
         <a class="inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(e.siteUrl)} target="_blank" rel="noopener noreferrer" title="Открыть сайт (в новой вкладке)" aria-label="Открыть сайт {domain}" onclick={(ev) => ev.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
       </span>
     </td>
-    {#if e.error}
+    {#if e.manual}
+      <!-- Сайт без Search Console: прогресс — входы по счётчику на сайте. -->
+      <td colspan="2" class="text-xs text-ink-4" title="Сайта нет в Search Console: кликов, показов и позиций Google нет. Прогресс — по счётчику на сайте: входы из Google (с изменением) и не из Google; график — по раскрытию строки">без консоли</td>
+      <td class="num app-num pii"><span class={f.eg ? '' : 'text-ink-4'}>{fmt(f.eg)}</span> {#if f.dEg}{@render delta(f.dEg, f.pEg)}{/if}</td>
+      <td colspan="5" class="text-xs text-ink-4">нет в Search Console</td>
+    {:else if e.error}
       <td colspan="2" class="pii text-xs text-bad" title={e.error}>Google не ответил</td>
       <td class="num app-num pii {f.eg ? '' : 'text-ink-4'}">{fmt(f.eg)}</td>
       <td colspan="5" class="pii text-xs text-bad" title={e.error}>{e.error.slice(0, 80)}</td>
@@ -313,7 +323,34 @@
     <td class="num app-num pii"><span class={f.ext ? 'font-semibold' : 'text-ink-4'}>{fmt(f.ext)}</span> {#if f.dExt}{@render delta(f.dExt, f.pExt)}{/if}</td>
     <td class="text-xs" onclick={(ev) => ev.stopPropagation()}>{@render buysCell(e)}</td>
   </tr>
-  {#if isOpen && !e.error}
+  {#if isOpen && e.manual && e.counter}
+    {@const cur = e.counter.cur.map(asRow)}
+    {@const prev = e.counter.prev.map(asRow)}
+    <tr class="bg-sunk hover:bg-sunk">
+      <td></td>
+      <td colspan="15" class="py-2 pr-3">
+        <div class="mb-1 flex flex-wrap items-center gap-3 text-[11px] text-ink-3">
+          <span>По счётчику на сайте (Search Console у сайта нет):</span>
+          <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.clicks}></i>входы из Google</span>
+          <span class="flex items-center gap-1"><i class="inline-block h-0.5 w-3 rounded-full" style:background={SERIES.impr}></i>входы не из Google (Bing, ИИ, другие сайты)</span>
+          {#if prev.length}<span class="flex items-center gap-1"><i class="inline-block w-3 border-t border-dashed" style:border-color={SERIES.prev}></i>{cmpLabel}</span>{/if}
+          {#if cur.length}<span class="ml-auto">{fd(cur[0].date)} – {fd(cur[cur.length - 1].date)}</span>{/if}
+        </div>
+        <svg viewBox="0 0 {W} {H}" class="h-28 w-full" preserveAspectRatio="none" aria-hidden="true">
+          {#if prev.length}
+            <path d={seriesPath(prev, 'clicks')} fill="none" stroke={SERIES.prev} stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
+          {/if}
+          <path d={seriesPath(cur, 'impressions')} fill="none" stroke={SERIES.impr} stroke-width="1" vector-effect="non-scaling-stroke" />
+          <path d={areaPath(cur)} fill={SERIES.clicks} fill-opacity="0.08" />
+          <path d={seriesPath(cur, 'clicks')} fill="none" stroke={SERIES.clicks} stroke-width="1.6" vector-effect="non-scaling-stroke" />
+          {#each e.events as ev (ev.id)}
+            {@const ex = eventX(cur, ev.date)}
+            {#if ex !== null}<line x1={ex} x2={ex} y1="1" y2={H - 1} stroke={ev.color} stroke-width="1.25" vector-effect="non-scaling-stroke"><title>{ev.label} · {ev.date}</title></line>{/if}
+          {/each}
+        </svg>
+      </td>
+    </tr>
+  {:else if isOpen && !e.error}
     <tr class="bg-sunk hover:bg-sunk">
       <td></td>
       <td colspan="15" class="py-2 pr-3">

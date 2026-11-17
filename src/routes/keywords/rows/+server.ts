@@ -9,14 +9,17 @@ import { clicksForRange, normHost } from '$lib/server/button-clicks';
 import { siteHostname } from '$lib/utils/url-filters';
 import { keyMapFor } from '$lib/server/key-map';
 import { searchAnalyticsQuery } from '$lib/server/google';
+import { MANUAL_ACCOUNT } from '$lib/server/manual-sites';
 
 /** Все ключи одного сайта за период: ?site=&acc=&p=today|yesterday|7|28|90|180|480 */
 export const GET: RequestHandler = async ({ url, locals }) => {
   requireAdmin(locals);
   const site = url.searchParams.get('site');
-  const acc = getAccount(db(), url.searchParams.get('acc') ?? '');
+  // Сайт «Без консоли»: ключей Google нет — только карта ключей и переходы к оплате.
+  const manual = url.searchParams.get('acc') === MANUAL_ACCOUNT;
+  const acc = manual ? null : getAccount(db(), url.searchParams.get('acc') ?? '');
   if (!site) throw error(400, 'site required');
-  if (!acc) throw error(404, 'консоль не найдена');
+  if (!acc && !manual) throw error(404, 'консоль не найдена');
   const p = reportPeriod(db());
   try {
     // Переходы к оплате по страницам сайта за тот же период (счётчик хаба):
@@ -36,6 +39,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     // Страницы целиком (с кликами по запросам, которые Google скрывает): клик
     // бывает на странице без видимого ключа — по ней видно, какую страницу
     // поддерживать и куда брать ссылки (просьба владелицы 14.11.2026).
+    if (!acc) return json({ rows: [], pages: null, checkouts, keyMap, period: p, manual: true });
     const [rows, pages] = await Promise.all([
       siteKeysForPeriod(db(), acc, site, p),
       searchAnalyticsQuery(db(), acc, site, { startDate: p.startDate, endDate: p.endDate, dimensions: ['page'], rowLimit: 1000 })

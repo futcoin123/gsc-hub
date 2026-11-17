@@ -2,7 +2,9 @@
 // Домены вписываются руками, закупки идут кампаниями по датам, ключи и
 // страницы — тоже руками. Кампанию фиксируют, когда ссылки куплены: из
 // зафиксированных складывается история «что и когда куплено».
-// С группами сайтов консолей (site_groups) таблицы не пересекаются.
+// С 17.11.2026 (просьба владелицы) эти сайты стоят и в «Ключах сайтов», и в
+// Dashboard вместе с сайтами консолей: ключи для них берут в обычные группы,
+// прогресс виден по счётчику на сайте (manualOnlyHosts, manualPurchases).
 import type { Db } from './db';
 import { parseHostList, normalizeHost } from './site-groups';
 import { csvCell } from './group-items';
@@ -98,6 +100,37 @@ export function removeManualSite(db: Db, host: string): void {
   const n = (db.prepare('SELECT COUNT(*) AS n FROM manual_links WHERE host = ?').get(h) as { n: number }).n;
   if (n) throw new Error(`У ${h} есть ссылки в кампаниях (${n} строк) — история закупок хранится. Сначала уберите их из кампаний`);
   db.prepare('DELETE FROM manual_sites WHERE host = ?').run(h);
+}
+
+// ─── В общих таблицах («Ключи сайтов», Dashboard) ─────────────────────────
+
+/** Сайт без консоли в таблицах сайтов: вместо консоли — эта метка. */
+export const MANUAL_ACCOUNT = 'manual';
+/** Адрес сайта без консоли в таблицах и группах — как property «Префикс URL». */
+export const manualSiteUrl = (host: string) => `https://${host}/`;
+
+/**
+ * Сайты «Без консоли», которых нет среди сайтов консолей (сайт добавили в
+ * Search Console — его строка уже есть, вторая не нужна).
+ */
+export function manualOnlyHosts(db: Db, consoleHosts: Iterable<string>): string[] {
+  const have = new Set([...consoleHosts].map((h) => normalizeHost(h)));
+  return listManualSites(db).map((s) => s.host).filter((h) => !have.has(h));
+}
+
+/** Купленные ссылки из зафиксированных кампаний «Без консоли»: по кампании и сайту. */
+export function manualPurchases(db: Db): { campaignId: number; name: string; date: string; host: string; qty: number; anchors: string[] }[] {
+  const out = new Map<string, { campaignId: number; name: string; date: string; host: string; qty: number; anchors: string[] }>();
+  for (const l of linkHistory(db)) {
+    if (!l.fixedAt) continue;
+    const k = `${l.campaignId}|${l.host}`;
+    const b = out.get(k) ?? { campaignId: l.campaignId, name: l.campaignName, date: l.date, host: l.host, qty: 0, anchors: [] };
+    b.qty += l.qty;
+    const a = l.kind === 'naked' ? 'безанкор' : l.anchor;
+    if (!b.anchors.includes(a)) b.anchors.push(a);
+    out.set(k, b);
+  }
+  return [...out.values()];
 }
 
 // ─── Кампании ─────────────────────────────────────────────────────────────

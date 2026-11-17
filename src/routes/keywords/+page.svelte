@@ -63,7 +63,7 @@
   const sort = new TableSort<K>('impressions', -1, ['impressions', 'clicks', 'ctr', 'pay', 'group']);
   const sites = $derived(
     sort.apply(
-      data.sites.filter((s) => (!search.trim() || s.siteUrl.toLowerCase().includes(search.trim().toLowerCase())) && (!hideEmpty || s.impressions > 0)),
+      data.sites.filter((s) => (!search.trim() || s.siteUrl.toLowerCase().includes(search.trim().toLowerCase())) && (!hideEmpty || s.impressions > 0 || s.manual)),
       (s, k) =>
         k === 'site' ? display(s.siteUrl)
         : k === 'account' ? (s.accountLabel ?? s.accountEmail)
@@ -138,7 +138,7 @@
                     <a class="ml-0.5 inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(s.siteUrl)} target="_blank" rel="noopener noreferrer" title="Перейти на сайт (в новой вкладке)" aria-label="Перейти на сайт {display(s.siteUrl)}" onclick={(e) => e.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
                   </span>
                 </td>
-                <td class="pii text-xs text-ink-3">{s.accountLabel ?? s.accountEmail}</td>
+                <td class="pii text-xs text-ink-3">{#if s.manual}<a class="text-ink-3 hover:text-acc hover:underline" href="/manual-sites" onclick={(e) => e.stopPropagation()} title="Сайта нет в Search Console — он из раздела «Без консоли». Ключи для закупки — в строке «Свой ключ» (раскройте сайт)">без консоли</a>{:else}{s.accountLabel ?? s.accountEmail}{/if}</td>
                 <!-- Ключи карты копируют — нажатие здесь строку не сворачивает. -->
                 <td class="max-w-[22rem] cursor-text text-xs" onclick={(e) => e.stopPropagation()}>
                   {#if km}
@@ -155,7 +155,9 @@
                     <span class="text-ink-4" title="Сайта пока нет в «Карте ключей FUT». Хаб ищет его в карте раз в 3 дня — когда появится, ключи отметятся сами">нет в карте</span>
                   {/if}
                 </td>
-                {#if s.error}
+                {#if s.manual}
+                  <td colspan="4" class="text-xs text-ink-4" title="Сайта нет в Search Console — цифр Google нет">нет в Search Console</td>
+                {:else if s.error}
                   <td colspan="4" class="text-xs text-bad" title={s.error}>не загрузилось</td>
                 {:else}
                   <td class="num app-num">{fmt(s.impressions)}</td>
@@ -168,14 +170,18 @@
                 <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].languages.join(', ') || '—'}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
                 <td class="text-xs text-ink-2">{#if locale[s.siteUrl]}{locale[s.siteUrl].geos.join(', ')}{:else if localeLoading}<span class="text-ink-4">…</span>{/if}</td>
                 <td class="text-right">
-                  <a class="btn btn-ghost btn-sm" href="/properties/{encodeURIComponent(s.siteUrl)}?acc={encodeURIComponent(s.accountId)}" onclick={(e) => e.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">Подробно</a>
+                  {#if s.manual}
+                    <a class="btn btn-ghost btn-sm" href="/manual-sites" onclick={(e) => e.stopPropagation()} title="Раздел «Без консоли»: сайты, кампании и история закупок">Подробно</a>
+                  {:else}
+                    <a class="btn btn-ghost btn-sm" href="/properties/{encodeURIComponent(s.siteUrl)}?acc={encodeURIComponent(s.accountId)}" onclick={(e) => e.stopPropagation()} title="Страница сайта в хабе: графики, страницы, ключи">Подробно</a>
+                  {/if}
                 </td>
               </tr>
               {#if open.has(k)}
                 <tr class="bg-sunk hover:bg-sunk">
                   <td colspan="12" class="px-3">
                     {#key data.period.key}
-                      <SiteKeysTable siteUrl={s.siteUrl} accountId={s.accountId} period={data.period.key} siteTotals={s.error ? null : { clicks: s.clicks, impressions: s.impressions }} />
+                      <SiteKeysTable siteUrl={s.siteUrl} accountId={s.accountId} period={data.period.key} siteTotals={s.error || s.manual ? null : { clicks: s.clicks, impressions: s.impressions }} />
                     {/key}
                   </td>
                 </tr>

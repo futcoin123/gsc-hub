@@ -10,8 +10,10 @@ import { labelKey } from '$lib/utils/site-label';
 import { addCalendarDays } from '$lib/server/gsc-calendar';
 import { compareWindow } from '$lib/utils/compare-window';
 import { userFavorites } from '$lib/server/user-selection';
-import { clicksForRange } from '$lib/server/button-clicks';
+import { clicksForRange, viewsByDay } from '$lib/server/button-clicks';
 import { sourceOf } from '$lib/utils/traffic-source';
+import { manualOnlyHosts, manualPurchases, manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
+import { counterDays, type CounterDay } from '$lib/utils/counter-days';
 
 /** Входы на сайт по счётчику: g — из Google, остальные — не из Google и не прямые. */
 type Ext = { g: number; b: number; s: number; ai: number; o: number };
@@ -54,13 +56,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   }
 
   // Закупки ссылок по сайту: какие группы, когда, сколько ссылок и с какими анкорами.
-  type Buy = { groupId: number; name: string; date: string; qty: number; anchors: string[] };
+  // href — что изменилось после закупки (группа) или кампания «Без консоли».
+  type Buy = { key: string; href: string; name: string; date: string; qty: number; anchors: string[] };
   const buys = new Map<string, Buy[]>();
   for (const p of listGroupPurchases(db())) {
     const bySite = new Map<string, Buy>();
     for (const i of p.items) {
       const h = labelKey(i.siteUrl);
-      const b = bySite.get(h) ?? { groupId: p.groupId, name: p.name, date: p.date, qty: 0, anchors: [] };
+      const b = bySite.get(h) ?? { key: `g${p.groupId}`, href: `/purchases?g=${p.groupId}`, name: p.name, date: p.date, qty: 0, anchors: [] };
       b.qty += i.qty;
       const a = i.kind === 'naked' ? 'безанкор' : i.query;
       if (!b.anchors.includes(a)) b.anchors.push(a);
@@ -68,6 +71,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     }
     for (const [h, b] of bySite) buys.set(h, [...(buys.get(h) ?? []), b]);
   }
+  // Купленное кампаниями «Без консоли» — в той же колонке.
+  for (const m of manualPurchases(db())) {
+    const b: Buy = { key: `m${m.campaignId}`, href: `/manual-sites?c=${m.campaignId}`, name: m.name, date: m.date, qty: m.qty, anchors: m.anchors };
+    buys.set(m.host, [...(buys.get(m.host) ?? []), b]);
+  }
+  for (const list of buys.values()) list.sort((a, b) => b.date.localeCompare(a.date));
 
   // Заходы не из Google (просьба владелицы 14.11.2026: продвижение идёт и в
   // Bing, ИИ, других поисковиках и сайтах) — за те же даты и за период сравнения.
@@ -80,10 +89,42 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     ext: extNow.get(labelKey(e.siteUrl)) ?? noExt(),
     extPrev: extPrev.get(labelKey(e.siteUrl)) ?? noExt(),
     ...e,
+    manual: false,
+    counter: null as { cur: CounterDay[]; prev: CounterDay[] } | null,
     events: toChartEvents(eventsByHost.get(hostOfSite(e.siteUrl)) ?? []),
-    // Новые закупки сверху (listGroupPurchases уже отдаёт по дате, новые первыми).
+    // Новые закупки сверху.
     buys: buys.get(labelKey(e.siteUrl)) ?? []
   }));
+
+  // Сайты «Без консоли» (просьба владелицы 17.11.2026: на них тоже покупают
+  // ссылки — видеть прогресс): цифр Google нет, прогресс — по счётчику на сайте,
+  // график по раскрытию — входы по дням.
+  const manualHosts = manualOnlyHosts(db(), entries.map((e) => labelKey(e.siteUrl)));
+  if (manualHosts.length) {
+    const cur = counterDays(viewsByDay(db(), period.startDate, period.endDate), manualHosts, period.startDate, period.endDate);
+    const prev = counterDays(viewsByDay(db(), prevWin.startDate, prevWin.endDate), manualHosts, prevWin.startDate, prevWin.endDate);
+    const zero = { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+    for (const h of manualHosts) {
+      const siteUrl = manualSiteUrl(h);
+      rows.push({
+        ext: extNow.get(h) ?? noExt(),
+        extPrev: extPrev.get(h) ?? noExt(),
+        accountId: MANUAL_ACCOUNT,
+        accountEmail: '',
+        accountLabel: null,
+        siteUrl,
+        current: [],
+        previous: [],
+        currentTotals: zero,
+        previousTotals: zero,
+        error: null,
+        manual: true,
+        counter: { cur: cur.get(h) ?? [], prev: prev.get(h) ?? [] },
+        events: toChartEvents(eventsByHost.get(hostOfSite(siteUrl)) ?? []),
+        buys: buys.get(h) ?? []
+      });
+    }
+  }
 
   return { entries: rows, errors, days, comparable, cmp: { key: cmp.key, start: cmp.window?.startDate ?? null, end: cmp.window?.endDate ?? null }, labels: siteLabels(db()), favorites: userFavorites(db()) };
 };

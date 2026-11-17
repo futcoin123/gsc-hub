@@ -8,12 +8,32 @@ import { siteHostname } from '$lib/utils/url-filters';
 import { keyMapAll, keyMapHeadline } from '$lib/server/key-map';
 import { mapSummary } from '$lib/utils/key-map';
 import { seedSiteLabels, siteLabels } from '$lib/server/site-labels';
+import { manualOnlyHosts, manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
+import { labelKey } from '$lib/utils/site-label';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
   const period = reportPeriod(db());
   await seedSiteLabels(db());
-  const { sites, errors } = await sitesForPeriod(db(), period);
+  const { sites: gscSites, errors } = await sitesForPeriod(db(), period);
+  // Сайты «Без консоли» — тоже здесь (просьба владелицы 17.11.2026: на них
+  // покупают ссылки): ключи карты, переходы к оплате, «В группу», «Свой ключ».
+  // Цифр Google у них нет.
+  const sites = [
+    ...gscSites.map((st) => ({ ...st, manual: false })),
+    ...manualOnlyHosts(db(), gscSites.map((st) => labelKey(st.siteUrl))).map((h) => ({
+      siteUrl: manualSiteUrl(h),
+      accountId: MANUAL_ACCOUNT,
+      accountEmail: '',
+      accountLabel: null as string | null,
+      clicks: 0,
+      impressions: 0,
+      ctr: 0,
+      position: null as number | null,
+      error: undefined as string | undefined,
+      manual: true
+    }))
+  ];
   // Нажатия кнопки оплаты (переход на партнёрку) по доменам за тот же период —
   // счётчик хаба на сайтах.
   const payByHost: Record<string, number> = {};
