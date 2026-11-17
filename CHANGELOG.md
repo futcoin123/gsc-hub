@@ -75,6 +75,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **A row no longer collapses when text is copied from it.** Selecting a
+  keyword or a site name with the mouse or a double click leaves an expanded
+  row open (Site keys, Buttons, Dashboard, Sites). A click in the "Key map"
+  column never collapses or expands the row.
 - **Site keys: the "Key map" column shows the main keyword and 1–3 secondary
   keywords as the map assigned them, with the Ahrefs volume in brackets.**
   Secondary keywords are only those with an Ahrefs volume, at most three: the

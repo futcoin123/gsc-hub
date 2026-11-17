@@ -16,6 +16,7 @@
   import { siteHref, siteDomain } from '$lib/utils/site';
   import { SERIES } from '$lib/chart-theme';
   import type { PageData } from './$types';
+  import { selecting } from '$lib/utils/selecting';
 
   let { data }: { data: PageData } = $props();
   $effect.pre(() => useLabels(data.labels));
@@ -273,7 +274,7 @@
   {@const f = figures(e)}
   {@const isOpen = open.has(keyOf(e))}
   {@const domain = siteDomain(e.siteUrl)}
-  <tr class="{canOpen ? 'cursor-pointer' : ''} {dim ? 'opacity-60' : ''}" class:is-selected={isOpen} onclick={() => toggleOpen(e)}>
+  <tr class="{canOpen ? 'cursor-pointer' : ''} {dim ? 'opacity-60' : ''}" class:is-selected={isOpen} onclick={() => !selecting() && toggleOpen(e)}>
     <td class="w-8 text-center" onclick={(ev) => ev.stopPropagation()}>
       {#if dim}
         <button type="button" class="btn btn-ghost btn-sm text-xs" title="Вернуть сайт в таблицу" onclick={() => unhide(e)}>вернуть</button>

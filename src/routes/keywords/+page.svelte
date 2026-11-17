@@ -14,6 +14,7 @@
   import { TableSort } from '$lib/table-sort.svelte';
   import { loadGroupItems, siteInTarget, pastGroupsOf } from '$lib/group-items.svelte';
   import { siteHref } from '$lib/utils/site';
+  import { selecting } from '$lib/utils/selecting';
 
   // Ключи карты по странам: у сайта с языковыми папками — главный и свои
   // второстепенные у каждой страны. В скобках — частотность Ahrefs по карте.
@@ -128,7 +129,7 @@
             {#each sites as s (key(s))}
               {@const k = key(s)}
               {@const km = data.keyMap[s.siteUrl]}
-              <tr class="cursor-pointer" class:is-selected={open.has(k)} onclick={() => toggle(k)}>
+              <tr class="cursor-pointer" class:is-selected={open.has(k)} onclick={() => !selecting() && toggle(k)}>
                 <td class="pii font-semibold text-ink">
                   <span class="flex items-center gap-1">
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(k) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
@@ -138,7 +139,8 @@
                   </span>
                 </td>
                 <td class="pii text-xs text-ink-3">{s.accountLabel ?? s.accountEmail}</td>
-                <td class="max-w-[22rem] text-xs">
+                <!-- Ключи карты копируют — нажатие здесь строку не сворачивает. -->
+                <td class="max-w-[22rem] cursor-text text-xs" onclick={(e) => e.stopPropagation()}>
                   {#if km}
                     <span class="flex flex-col gap-0.5">
                       {#each byCountry(km) as g (g.cc)}

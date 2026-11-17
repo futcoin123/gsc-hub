@@ -15,6 +15,7 @@
   import { googleSerpUrl } from '$lib/utils/country';
   import { SERIES, AXIS } from '$lib/chart-theme';
   import type { PageData } from './$types';
+  import { selecting } from '$lib/utils/selecting';
   onMount(() => { loadGroupItems(); });
   let { data }: { data: PageData } = $props();
 
@@ -1226,7 +1227,7 @@
                 {@const subSt = submitStates.get(sKey)}
                 {@const bSt = bingStates.get(sKey)}
                 {@const iSt = indexnowStates.get(sKey)}
-                <tr class="cursor-pointer {s.hasIndexNow ? '' : 'bg-warn-t/60 hover:bg-warn-t'} {isHidden ? 'is-hidden-row' : ''}" class:is-selected={expanded} class:has-status={!!(subSt || bSt || iSt)} onclick={() => toggleSite(s)} title={s.hasIndexNow ? undefined : 'Нет IndexNow-ключа ({key}.txt) — не настроен для Bing/IndexNow'}>
+                <tr class="cursor-pointer {s.hasIndexNow ? '' : 'bg-warn-t/60 hover:bg-warn-t'} {isHidden ? 'is-hidden-row' : ''}" class:is-selected={expanded} class:has-status={!!(subSt || bSt || iSt)} onclick={() => !selecting() && toggleSite(s)} title={s.hasIndexNow ? undefined : 'Нет IndexNow-ключа ({key}.txt) — не настроен для Bing/IndexNow'}>
                   <td class="min-w-[14rem]">
                     <div class="flex items-center gap-1.5 whitespace-nowrap">
                       {@render chevron(expanded)}
@@ -1498,7 +1499,7 @@
                 {@const serpUrl = googleSerpUrl(q.query, q.country)}
                 {@const pos = q.gsc?.position ?? q.bing?.position ?? 0}
                 {@const posTone = pos > 0 && pos <= 10 ? 'text-up' : pos > 0 && pos <= 20 ? 'text-warn' : 'text-ink'}
-                <tr class="group cursor-pointer" class:is-selected={expandedQuery === qKey} onclick={() => toggleQuery(q.query, q.page, q.country)}>
+                <tr class="group cursor-pointer" class:is-selected={expandedQuery === qKey} onclick={() => !selecting() && toggleQuery(q.query, q.page, q.country)}>
                   <td>
                     <div class="flex items-center gap-1.5">
                       {@render chevron(expandedQuery === qKey)}
