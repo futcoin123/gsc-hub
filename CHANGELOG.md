@@ -8,8 +8,9 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
-- **Back-to-top arrow across the panel.** A round button in the bottom right
-  shows up after about a screen of scrolling and takes you back to the top.
+- **Back-to-top arrow across the panel.** A round button on the right, a little
+  above the bottom edge, shows up after a short scroll and takes you back to
+  the top.
 - **Site keys: "Входы" and "Прямые" columns before checkouts.** Counter visits
   for the period from Google, Bing, other search engines, AI and other sites,
   and direct visits separately; both sortable. The "Details" column is gone.

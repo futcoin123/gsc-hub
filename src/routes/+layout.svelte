@@ -168,12 +168,13 @@
     ro.observe(el);
     return () => ro.disconnect();
   });
-  // Стрелка «наверх» (просьба владелицы 17.11.2026): появляется, когда страницу
-  // прокрутили больше чем на экран, и плавно поднимает к началу.
+  // Стрелка «наверх» (просьба владелицы 17.11.2026): появляется уже после
+  // небольшой прокрутки (150 px) и плавно поднимает к началу; стоит повыше от
+  // нижнего края, чтобы не теряться.
   let showTop = $state(false);
   $effect(() => {
     if (typeof window === 'undefined') return;
-    const on = () => (showTop = window.scrollY > window.innerHeight * 0.8);
+    const on = () => (showTop = window.scrollY > 150);
     on();
     window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
@@ -307,8 +308,8 @@
 <style>
   .to-top {
     position: fixed;
-    right: 20px;
-    bottom: 20px;
+    right: 24px;
+    bottom: 96px;
     z-index: 40;
     display: inline-flex;
     align-items: center;
