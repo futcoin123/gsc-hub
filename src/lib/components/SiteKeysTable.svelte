@@ -145,7 +145,10 @@
   // Ключи одной страницы — по клику на неё в блоке «Страницы» (точное совпадение адреса).
   let pageOnly = $state<string | null>(null);
   let kind = $state<'all' | 'conv' | 'brand' | 'any'>('all');
-  let limit = $state(300);
+  // Все ключи сайта сразу (просьба владелицы 17.11.2026: при 300 строках ключи
+  // с парой показов — например, кликнутые «toty fc 27» — прятались за «Показать
+  // ещё»). Ограничение только для очень больших сайтов, чтобы страница не тормозила.
+  let limit = $state(5000);
   const vols = new Volumes();
   // Отмеченные ключи — для проверки частотности в DataForSEO.
   let picked = $state<Set<string>>(new Set());
@@ -424,7 +427,7 @@
       </table>
     </div>
     {#if shown.length > limit}
-      <button type="button" class="btn btn-ghost btn-sm mt-1" onclick={() => (limit += 500)}>Показать ещё ({fmt(shown.length - limit)})</button>
+      <button type="button" class="btn btn-ghost btn-sm mt-1" onclick={() => (limit += 5000)}>Показать ещё ({fmt(shown.length - limit)})</button>
     {/if}
   {/if}
 </div>

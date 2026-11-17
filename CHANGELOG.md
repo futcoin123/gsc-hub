@@ -87,6 +87,9 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Site keys: the expanded site lists all keywords at once.** The table used
+  to show the first 300 rows by impressions, so low-impression keywords, even
+  ones with clicks, hid behind "Show more". All rows (up to 5000) now show.
 - **Sites: own counter sites without Search Console are listed too.** A row
   with the domain, "без консоли · счётчик на сайте", the group cell, the site,
   site: search and Bing links; no Google figures (dashes) and no expansion
