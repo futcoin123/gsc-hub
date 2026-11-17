@@ -8,6 +8,12 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **Site indexing checked every 3 days, automatically.** The panel takes up to
+  100 pages from each site's sitemap and inspects each in Search Console (URL
+  Inspection API) on a timer, three sites at a time, each site every 3 days.
+  Sites shows "2 из 10 не в индексе" next to the console (hover: which pages
+  and Google's reason), "все 10 в индексе" or "индекс: не проверен" with the
+  reason. Google allows 2000 inspections a day per site; a check uses dozens.
 - **Dashboard: visits from outside Google.** Columns for Bing, other search
   engines, AI assistants, other sites and their total with change against the
   comparison period, from the site counter; Google (already in console

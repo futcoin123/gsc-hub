@@ -38,6 +38,18 @@
       .map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(h - (v / max) * h).toFixed(1)}`)
       .join(' ');
   }
+  /** Подсказка к «N не в индексе»: какие страницы и почему (как пишет Google). */
+  function indexTitle(c: { missing: { url: string; reason: string }[]; failed: number }, when: string): string {
+    const path = (u: string) => {
+      try {
+        return new URL(u).pathname;
+      } catch {
+        return u;
+      }
+    };
+    const lines = c.missing.map((m) => `${path(m.url)} — ${m.reason || 'не в индексе'}`);
+    return `Не в индексе Google (проверено ${when}, страницы из sitemap):\n${lines.join('\n')}${c.failed ? `\nНе проверено: ${c.failed}` : ''}`;
+  }
   function detailHref(s: { siteUrl: string; accountId: string }) {
     if (s.accountId === 'manual') return '/clicks';
     return `/properties/${encodeURIComponent(s.siteUrl)}?acc=${encodeURIComponent(s.accountId)}`;
@@ -1069,6 +1081,18 @@
 {#snippet xIcon()}
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
 {/snippet}
+{#snippet indexNote(c: NonNullable<SiteWithSummary['index']>)}
+  <!-- Индексация страниц из sitemap: панель проверяет сама раз в 3 дня. -->
+  {@const when = new Date(c.checkedAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+  {#if c.error}
+    <span class="text-ink-4" title="Индексацию проверить не удалось ({when}): {c.error}"> · индекс: не проверен</span>
+  {:else if c.notIndexed}
+    <span class="font-semibold text-warn" title={indexTitle(c, when)}> · {c.notIndexed} из {c.total} не в индексе</span>
+  {:else}
+    <span class="text-up" title="Все страницы из sitemap в индексе Google (проверено {when}){c.failed ? `; не проверено: ${c.failed}` : ''}"> · все {c.indexed} в индексе</span>
+  {/if}
+{/snippet}
+
 {#snippet chevron(open: boolean)}
   <svg viewBox="0 0 16 16" class="inline-block h-3 w-3 align-[-1px] text-ink-4 transition-transform duration-150 print:hidden {open ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
 {/snippet}
@@ -1274,6 +1298,7 @@
                     </div>
                     <div class="pii truncate pl-[18px] text-[11px] text-ink-3">
                       {#if s.manual}<span title="Ваш сайт со счётчиком, которого ещё нет в Search Console: цифры — по счётчику на «Кнопках» и в Dashboard">без консоли · счётчик на сайте</span>{:else}{s.accountLabel ?? s.accountEmail}{#if s.accountLabel}<span class="text-ink-4"> ({s.accountEmail})</span>{/if}{/if}
+                      {#if s.index}{@render indexNote(s.index)}{/if}
                     </div>
                   </td>
                   <td class="print:hidden"><SiteGroupCell siteUrl={s.siteUrl} /></td>

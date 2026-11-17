@@ -1,6 +1,7 @@
 import { building } from '$app/environment';
 import { startBacklinkMonitor } from '$lib/server/backlink-monitor';
 import { startUptimeMonitor } from '$lib/server/uptime';
+import { startIndexMonitor } from '$lib/server/index-monitor';
 import { db } from '$lib/server/db';
 import { sequence } from '@sveltejs/kit/hooks';
 import { handle as authHandle } from './auth';
@@ -19,5 +20,7 @@ export const init = () => {
     }
     startBacklinkMonitor();
     startUptimeMonitor(db);
+    // Индексация сайтов раз в 3 дня — сама, по таймеру.
+    startIndexMonitor(db);
   }
 };

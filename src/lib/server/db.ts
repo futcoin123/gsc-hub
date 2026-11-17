@@ -440,6 +440,20 @@ CREATE INDEX IF NOT EXISTS counter_visitors_at ON counter_visitors(at);
 -- Метка сайта (проект): у всех сайтов на 13.11.2026 — «futcoin», у новых —
 -- своя (решение владелицы 13.11.2026). Видна в «Ключах сайтов», «Группах» и в
 -- ТЗ (CSV). host — домен без www.
+-- Индексация сайта: последняя проверка страниц из sitemap (index-monitor.ts,
+-- раз в 3 дня). missing — JSON [{url, reason}] страниц не в индексе.
+CREATE TABLE IF NOT EXISTS index_checks (
+  site_url    TEXT PRIMARY KEY,
+  account_id  TEXT NOT NULL,
+  checked_at  INTEGER NOT NULL,
+  total       INTEGER NOT NULL,
+  indexed     INTEGER NOT NULL,
+  not_indexed INTEGER NOT NULL,
+  failed      INTEGER NOT NULL,
+  missing     TEXT NOT NULL DEFAULT '[]',
+  error       TEXT
+);
+
 CREATE TABLE IF NOT EXISTS site_labels (
   host   TEXT PRIMARY KEY,
   label  TEXT NOT NULL,

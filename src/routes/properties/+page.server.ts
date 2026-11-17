@@ -8,6 +8,7 @@ import { listSiteDates } from '$lib/server/site_dates';
 import { siteToHost, getBing } from '$lib/server/bing';
 import { requireAdmin } from '$lib/server/guard';
 import { counterOnlyHosts } from '$lib/server/own-sites';
+import { indexChecks, type IndexCheck } from '$lib/server/index-monitor';
 import { manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
 
 const SORT_FIELDS = ['clicks', 'impressions', 'ctr', 'position', 'site', 'account', 'date'] as const;
@@ -34,7 +35,7 @@ function parseDir(raw: string | null): SortDir {
   return raw === 'asc' ? 'asc' : 'desc';
 }
 
-type SiteWithMeta = SiteWithSummary & { createdAt: number | null; manual: boolean };
+type SiteWithMeta = SiteWithSummary & { createdAt: number | null; manual: boolean; index: IndexCheck | null };
 
 function compareSites(a: SiteWithMeta, b: SiteWithMeta, field: SortField, dir: SortDir): number {
   // Sites with no known creation date always go to the bottom.
@@ -84,6 +85,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   // creation date (from the site_dates table, filled by an external import).
   const indexNowHosts = listIndexNowHosts(db());
   const siteDates = listSiteDates(db());
+  // Индексация страниц из sitemap — последняя проверка (раз в 3 дня, index-monitor.ts).
+  const checks = indexChecks(db());
   const enriched = sitesResult.sites.map((s) => {
     const host = siteToHost(s.siteUrl);
     return {
@@ -91,7 +94,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       hasIndexNow: indexNowHosts.has(host),
       bing: bing.traffic.get(host) ?? null,
       createdAt: siteDates.get(host) ?? null,
-      manual: false
+      manual: false,
+      index: checks.get(s.siteUrl) ?? null
     };
   });
   // Свои сайты со счётчиком, которых ещё нет в Search Console (просьба владелицы
@@ -109,7 +113,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       hasIndexNow: indexNowHosts.has(h),
       bing: bing.traffic.get(h) ?? null,
       createdAt: siteDates.get(h) ?? null,
-      manual: true
+      manual: true,
+      index: null
     });
   }
   const sites = enriched.sort((a, b) => compareSites(a, b, sort, dir));
