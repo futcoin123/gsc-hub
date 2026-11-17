@@ -26,6 +26,8 @@
     for (const s2 of km.secondary) at(s2.cc).secondary.push(s2);
     return [...out.entries()].map(([cc, v]) => ({ cc, ...v }));
   }
+  /** Консоль коротко: первые буквы адреса или названия. */
+  const short = (v: string) => (v.length > 5 ? v.slice(0, 4) + '…' : v);
   const ahrefs = (v: number | null) => (v == null ? '—' : v.toLocaleString('ru-RU'));
   const ahrefsTitle = (v: number | null) => (v == null ? 'в Ahrefs данных нет' : `Ahrefs: ${v.toLocaleString('ru-RU')} запросов в месяц`);
 
@@ -112,13 +114,13 @@
           <thead>
             <tr>
               <SortTh {sort} k="site" label="Сайт" />
-              <SortTh {sort} k="account" label="Консоль" />
+              <SortTh {sort} k="account" label="Консоль" title="Консоль Search Console сайта — первые буквы, полностью — при наведении" />
               <SortTh {sort} k="map" label="Карта ключей" title="Главный ключ сайта и сколько второстепенных — из «Карты ключей FUT». Сайт берётся из карты один раз и потом не меняется; сайты, которых в карте ещё нет, хаб ищет в ней раз в 3 дня" />
               <SortTh {sort} k="impressions" label="Impr" num />
               <SortTh {sort} k="clicks" label="Clicks" num />
               <SortTh {sort} k="ctr" label="CTR" num />
               <SortTh {sort} k="position" label="Avg Pos" num />
-              <SortTh {sort} k="pay" label="Перешли к оплате" num title="Нажатия кнопки оплаты — переходы на партнёрку за тот же период, по счётчику хаба на сайте" />
+              <SortTh {sort} k="pay" label="К оплате" num title="Перешли к оплате: нажатия кнопки оплаты — переходы на партнёрку за тот же период, по счётчику хаба на сайте" />
               <SortTh {sort} k="group" label="В группу" title="Кнопка + добавляет сайт в группу, выбранную над таблицей («Сайты в группу»). Рядом — прошлые закупки сайта. Сортировка: сначала сайты этой группы, потом по последней закупке" />
               <SortTh {sort} k="lang" label="Язык" title="Язык сайта — как указан на его странице (у сайта с языковыми папками — все языки). Названия — как на бирже ссылок" />
               <SortTh {sort} k="geo" label="Гео" title="Страна сайта: из «Карты ключей FUT», иначе по зоне домена (.de, .co.uk), иначе Global. Названия — как на бирже ссылок" />
@@ -130,7 +132,7 @@
               {@const k = key(s)}
               {@const km = data.keyMap[s.siteUrl]}
               <tr class="cursor-pointer" class:is-selected={open.has(k)} onclick={() => !selecting() && toggle(k)}>
-                <td class="pii font-semibold text-ink">
+                <td class="pii whitespace-nowrap font-semibold text-ink">
                   <span class="flex items-center gap-1">
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(k) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
                     {display(s.siteUrl)}
@@ -138,9 +140,10 @@
                     <a class="ml-0.5 inline-flex rounded p-0.5 text-ink-4 hover:bg-sunk hover:text-acc" href={siteHref(s.siteUrl)} target="_blank" rel="noopener noreferrer" title="Перейти на сайт (в новой вкладке)" aria-label="Перейти на сайт {display(s.siteUrl)}" onclick={(e) => e.stopPropagation()}><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
                   </span>
                 </td>
-                <td class="pii text-xs text-ink-3">{#if s.manual}<span title="Ваш сайт со счётчиком, которого ещё нет в Search Console: цифр Google нет, переходы к оплате — по счётчику. Ключи для закупки — в строке «Свой ключ» (раскройте сайт)">без консоли</span>{:else}{s.accountLabel ?? s.accountEmail}{/if}</td>
+                <!-- Узко (просьба владелицы 17.11.2026): первые буквы консоли, полностью — в подсказке; место — ключам карты. -->
+                <td class="pii whitespace-nowrap text-xs text-ink-3">{#if s.manual}<span title="Без консоли: ваш сайт со счётчиком, которого ещё нет в Search Console. Цифр Google нет, переходы к оплате — по счётчику. Ключи для закупки — в строке «Свой ключ» (раскройте сайт)">нет</span>{:else}<span title={s.accountLabel ?? s.accountEmail}>{short(s.accountLabel ?? s.accountEmail)}</span>{/if}</td>
                 <!-- Ключи карты копируют — нажатие здесь строку не сворачивает. -->
-                <td class="max-w-[22rem] cursor-text text-xs" onclick={(e) => e.stopPropagation()}>
+                <td class="min-w-[22rem] max-w-[34rem] cursor-text text-xs" onclick={(e) => e.stopPropagation()}>
                   {#if km}
                     <span class="flex flex-col gap-0.5">
                       {#each byCountry(km) as g (g.cc)}

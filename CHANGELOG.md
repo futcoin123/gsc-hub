@@ -75,6 +75,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Site keys: narrow "Console" column, "Checkouts" header shortened.** The
+  console shows its first letters (full on hover), a site without a console
+  shows "нет"; the room goes to the "Key map" column so keywords fit on one or
+  two lines.
 - **Own sites without Search Console in Site keys and Dashboard.** These are
   the sites with the unified counter (the panel got events or a link check
   from them) that are in no console - fc-coins.net and the other new ones.
