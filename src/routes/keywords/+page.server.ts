@@ -53,8 +53,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   for (const st of sites) pay[st.siteUrl] = payByHost[hostOf(st.siteUrl)] ?? 0;
   // Итого по доменам: у домена может быть две property — не считаем дважды.
   const payTotal = [...new Set(sites.map((st) => hostOf(st.siteUrl)))].reduce((a, h) => a + (payByHost[h] ?? 0), 0);
-  // «Карта ключей FUT»: главный ключ сайта и 1–3 второстепенных с частотностью
-  // Ahrefs, как их отобрала карта (просьба владелицы 14.11.2026); null — сайта в карте нет.
+  // «Карта ключей FUT»: главный ключ сайта и до 3 продающих второстепенных с
+  // запросами — вид «План» карты, цифра «Сент.» (просьба владелицы 14 и
+  // 17.11.2026); null — сайта в карте нет.
   let all = new Map<string, unknown>();
   let headline = new Map<string, Parameters<typeof mapSummary>[0]>();
   try {

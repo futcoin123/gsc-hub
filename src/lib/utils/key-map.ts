@@ -58,23 +58,28 @@ export function mapGeo(country: string): string {
   return COUNTRY[MAP_COUNTRY[country] ?? ''] ?? country;
 }
 
-/** Ключ сайта для строки сайта: главный или один из 1–3 второстепенных, с частотностью Ahrefs из карты. */
+/** Ключ сайта для строки сайта: главный или один из 1–3 продающих второстепенных, с запросами из карты. */
 export interface MapKey {
   country: string;
   url: string;
   key: string;
   role: KeyRole;
-  /** Частотность Ahrefs (запросов в месяц) по карте; null — данных Ahrefs нет. */
-  ahrefs: number | null;
+  /** «Сент.» карты — запросов в Google за сентябрь 2026 (первая цифра в виде «План»). */
+  volume: number;
+  /** «Ср.» карты — в среднем за 12 месяцев. */
+  avg: number;
 }
 
 /**
- * Для строки сайта (просьба владелицы 14.11.2026): по каждой стране карты —
- * главный ключ и второстепенные, как их отобрала карта (до трёх, с
- * частотностью Ahrefs). У каждого — страна, нужна сайту с языковыми папками.
+ * Для строки сайта (просьба владелицы 14.11.2026, уточнено 17.11.2026): по
+ * каждой стране карты — главный ключ и до трёх продающих второстепенных с
+ * запросами (вид «План» карты, цифра «Сент.»). У каждого — страна, нужна сайту
+ * с языковыми папками.
  */
 export function mapSummary(keys: MapKey[]): { main: (MapKey & { geo: string; cc: string })[]; secondary: (MapKey & { geo: string; cc: string })[] } {
-  const withGeo = (k: MapKey) => ({ ...k, geo: mapGeo(k.country), cc: k.country });
+  // Записи из старой карты (до 17.11.2026) без цифр — не падаем, показываем 0.
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const withGeo = (k: MapKey) => ({ ...k, volume: num(k.volume), avg: num(k.avg), geo: mapGeo(k.country), cc: k.country });
   return { main: keys.filter((k) => k.role === 'main').map(withGeo), secondary: keys.filter((k) => k.role === 'secondary').map(withGeo) };
 }
 

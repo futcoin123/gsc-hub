@@ -94,71 +94,88 @@ describe('пометки у ключей', () => {
   });
 });
 
-describe('строка сайта: главный и 1–3 второстепенных с Ahrefs', () => {
+describe('строка сайта: главный и до 3 продающих второстепенных с запросами («Сент.»)', () => {
   // Строка группы: [ключ, сент., ср., Ahrefs, примечание, магазины, не серая, источник].
+  const g = (id: string, h: string, k: 'com' | 'info', rows: unknown[][]) => ({ id, h, k, r: rows });
+  const plan = (url: string, kind: string, main: string, group: string, sep: number, extra: Record<string, unknown> = {}) => ({ site: 'futcoins.co.uk', status: 'есть, открыт', url, kind, todo: 'внесено на сайт 09.11.2026', done: true, main, group, sep, avg: sep, variants: [], ...extra });
   const data = {
     countries: [
       {
-        id: 'ES',
+        id: 'UK',
         groups: [
-          { id: 'П-1', h: 'comprar monedas fc 27', r: [['comprar monedas fc 27', 590, 40, 80, 10, '', 1, 'Ahrefs']] },
-          { id: 'П-2', h: 'monedas fc 27', r: [['monedas fc 27', 900, 90, 150, 10, '', 1, 'Ahrefs']] },
-          { id: 'П-3', h: 'monedas fifa baratas', r: [['monedas fifa baratas', 100, 50, 60, 10, '', 1, 'Ahrefs']] },
-          { id: 'П-4', h: 'monedas fc 26 pc', r: [['monedas fc 26 pc', 10, 10, 0, 10, '', 1, 'DataForSEO']] },
-          { id: 'П-5', h: 'fc coins ps5', r: [['fc coins ps5', 20, 10, 10, 10, '', 1, 'Ahrefs']] },
-          { id: 'П-6', h: 'fc coins xbox', r: [['fc coins xbox', 20, 10, 20, 10, '', 1, 'Ahrefs']] },
-          // Серая строка — тот же запрос, что строка выше: её Ahrefs 0, берётся у строки выше.
-          { id: 'П-7', h: 'fut coins', r: [['fut coins', 1600, 1600, 500, 10, '', 1, 'Ahrefs'], ['futcoins', 1600, 1600, 0, 'Google: один запрос', '', 0, 'вручную']] },
-          { id: 'П-8', h: 'credit fut', r: [['credit fut', 320, 260, 200, 10, '', 1, 'Ahrefs']] }
+          g('П-007', 'fut coins', 'com', [['fut coins', 1650, 1660, 500, 10, '', 1, 'Ahrefs']]),
+          g('П-035', 'fut coins cheap', 'com', [['cheap fut coins', 100, 160, 200, 10, '', 1, 'Ahrefs']]),
+          g('П-114', 'fut coins pc', 'com', [['fut coins pc', 10, 20, 0, 10, '', 1, 'Ahrefs']]),
+          g('П-115', 'fut coins xbox', 'com', [['fut coins xbox', 20, 20, 0, 10, '', 1, 'Ahrefs']]),
+          g('И-388', 'fut coins ps5', 'info', [['fut coins ps5', 0, 10, 0, 10, '', 1, 'Ahrefs']]),
+          g('И-001', 'fc 27 web app', 'info', [['fc 27 web app', 215090, 19250, 0, 10, '', 1, 'Ahrefs']]),
+          g('И-110', 'comfort trade', 'info', [['comfort trade', 30, 20, 20, 10, '', 1, 'Ahrefs']]),
+          g('П-090', 'fut coins sale', 'com', [['fut coins sale', 0, 10, 0, 10, '', 1, 'Ahrefs']]),
+          g('П-002', 'fifa coins', 'com', [['fifa coins', 4400, 4000, 800, 10, '', 1, 'Ahrefs'], ['fifa coin', 4400, 4000, 0, 'Google: один запрос', '', 0, 'DataForSEO']])
         ],
+        plan: {
+          rows: [
+            plan('/', 'главная', 'futcoins', 'fut coins', 1650),
+            plan('/fut-coin/', 'внутренняя', 'fut coin', 'fut coins', 1650),
+            plan('/cheap-fut-coins/', 'цены', 'cheap fut coins', 'fut coins cheap', 100),
+            plan('/fut-coins-pc/', 'платформы', 'fut coins pc', 'fut coins pc', 10),
+            plan('/fut-coins-xbox/', 'платформы', 'fut coins xbox', 'fut coins xbox', 20),
+            // Инфо-страницы, гайды и ключи без запросов — нет.
+            plan('/fut-coins-ps5/', 'платформы', 'fut coins ps5', 'fut coins ps5', 0),
+            plan('/fc-27-web-app/', 'гайд', 'fc 27 web app', 'fc 27 web app', 215090),
+            plan('/comfort-trade/', 'инструкция', 'comfort trade', 'comfort trade', 30),
+            plan('/sale/', 'внутренняя', 'fut coins sale', 'fut coins sale', 0),
+            // Страница ещё не сделана — нет.
+            plan('/later/', 'внутренняя', 'fifa coins', 'fifa coins', 4400, { done: false })
+          ]
+        },
         pages: [
-          { site: 'futcoin.es', url: '/', key: 'comprar monedas fc 27', role: 'основной', gid: 'П-1' },
-          { site: 'futcoin.es', url: '/monedas-fc-27/', key: 'monedas fc 27', role: 'второстепенный', gid: 'П-2' },
-          { site: 'futcoin.es', url: '/baratas/', key: 'monedas fifa baratas', role: 'второстепенный', gid: 'П-3' },
-          // Первые страницы без ключа: Ahrefs 0 или нет группы — не берём.
-          { site: 'futcoin.es', url: '/pc/', key: 'monedas fc 26 pc', role: 'второстепенный', gid: 'П-4' },
-          { site: 'futcoin.es', url: '/faq/', key: 'preguntas monedas', role: 'второстепенный', gid: null },
-          { site: 'futcoin.es', url: '/ps5/', key: 'fc coins ps5', role: 'второстепенный', gid: 'П-5' },
-          { site: 'futcoin.es', url: '/xbox/', key: 'fc coins xbox', role: 'второстепенный', gid: 'П-6' },
-          { site: 'futcoin.es', url: '/contacto/', key: '', role: 'служебная', gid: null },
-          { site: 'futcoins.co.uk', url: '/', key: 'futcoins', role: 'основной', gid: 'П-7' },
-          // Ударения не мешают найти строку группы.
-          { site: 'fccoins.fr', url: '/', key: 'crédit fut', role: 'основной', gid: 'П-8' }
+          // У сайта из «Плана» вид «Сайты» не используется.
+          { site: 'futcoins.co.uk', url: '/x/', key: 'fifa coins', role: 'второстепенный', gid: 'П-002' },
+          // Сайт без «Плана» — по виду «Сайты»: продающие (П-) с запросами, серая строка — как строка выше.
+          { site: 'fccoinshub.co.uk', url: '/', key: 'fifa coin', role: 'основной', gid: 'П-002' },
+          { site: 'fccoinshub.co.uk', url: '/cheap/', key: 'cheap fut coins', role: 'второстепенный', gid: 'П-035' },
+          { site: 'fccoinshub.co.uk', url: '/app/', key: 'fc 27 web app', role: 'второстепенный', gid: 'И-001' }
         ]
       }
     ]
   };
   const h = buildHeadline(data);
-  const row = (host: string) => h[host].map((k: MapKey) => [k.role, k.key, k.ahrefs]);
+  const row = (host: string) => h[host].map((k: MapKey) => [k.role, k.key, k.volume]);
 
-  it('второстепенных не больше трёх, по Ahrefs, без ключей с нулём', () => {
-    expect(row('futcoin.es')).toEqual([
-      ['main', 'comprar monedas fc 27', 80],
-      ['secondary', 'monedas fc 27', 150],
-      ['secondary', 'monedas fifa baratas', 60],
-      ['secondary', 'fc coins xbox', 20]
+  it('вид «План»: главный и до трёх продающих с запросами, по убыванию; гайды, инфо и нули — нет', () => {
+    expect(row('futcoins.co.uk')).toEqual([
+      ['main', 'futcoins', 1650],
+      ['secondary', 'fut coin', 1650],
+      ['secondary', 'cheap fut coins', 100],
+      ['secondary', 'fut coins xbox', 20]
     ]);
+    expect(h['futcoins.co.uk'][0]).toMatchObject({ country: 'UK', url: '/', avg: 1650 });
   });
 
-  it('серая строка берёт частотность строки выше, ударения не мешают', () => {
-    expect(row('futcoins.co.uk')).toEqual([['main', 'futcoins', 500]]);
-    expect(row('fccoins.fr')).toEqual([['main', 'crédit fut', 200]]);
+  it('сайт без «Плана» — по виду «Сайты», цифра «Сент.» из группы', () => {
+    expect(row('fccoinshub.co.uk')).toEqual([
+      ['main', 'fifa coin', 4400],
+      ['secondary', 'cheap fut coins', 100]
+    ]);
   });
 
   it('сводка для строки сайта и подпись главного', () => {
     const keys: MapKey[] = [
-      { country: 'NL', url: '/nl/', key: 'fifa coins', role: 'main', ahrefs: 250 },
-      { country: 'NL', url: '/nl/web/', key: 'fut web app', role: 'secondary', ahrefs: 4100 },
-      { country: 'US', url: '/', key: 'fc coins for sale', role: 'main', ahrefs: null }
+      { country: 'NL', url: '/nl/', key: 'fifa coins', role: 'main', volume: 670, avg: 600 },
+      { country: 'NL', url: '/nl/web/', key: 'fc coins', role: 'secondary', volume: 670, avg: 500 },
+      { country: 'US', url: '/', key: 'fc coins for sale', role: 'main', volume: 30, avg: 20 }
     ];
     const s = mapSummary(keys);
-    expect(s.main.map((m) => [m.key, m.cc, m.geo, m.ahrefs])).toEqual([
-      ['fifa coins', 'NL', 'Netherlands', 250],
-      ['fc coins for sale', 'US', 'United States', null]
+    expect(s.main.map((m) => [m.key, m.cc, m.geo, m.volume])).toEqual([
+      ['fifa coins', 'NL', 'Netherlands', 670],
+      ['fc coins for sale', 'US', 'United States', 30]
     ]);
-    expect(s.secondary.map((m) => [m.key, m.cc, m.ahrefs])).toEqual([['fut web app', 'NL', 4100]]);
+    expect(s.secondary.map((m) => [m.key, m.cc, m.volume])).toEqual([['fc coins', 'NL', 670]]);
     expect(mainLabel(s.main[0], true)).toBe('fifa coins (NL)');
     expect(mainLabel(s.main[0], false)).toBe('fifa coins');
+    // Запись старой карты без цифр — 0, а не ошибка.
+    expect(mapSummary([{ country: 'UK', url: '/', key: 'futcoins', role: 'main' } as unknown as MapKey]).main[0]).toMatchObject({ volume: 0, avg: 0 });
   });
 });
 
@@ -210,11 +227,11 @@ describe('зашифрованная карта в хабе', () => {
   it('главный и второстепенные для строки сайта — из каждой новой карты целиком, и у взятых сайтов', async () => {
     const { keyMapHeadline } = await import('../src/lib/server/key-map');
     const { publicKey } = keyMapPublicInfo(db);
-    const k = (key: string, role: 'main' | 'secondary', ahrefs: number | null) => ({ country: 'ES', url: '/', key, role, ahrefs });
-    importKeyMap(db, encryptKeyMap({ mapUpdated: '2026-11-09', hosts: { 'futcoin.es': [page('comprar monedas fc 27')] }, headline: { 'futcoin.es': [k('comprar monedas fc 27', 'main', null)] } }, publicKey));
-    expect(keyMapHeadline(db).get('futcoin.es')).toEqual([k('comprar monedas fc 27', 'main', null)]);
-    importKeyMap(db, encryptKeyMap({ mapUpdated: '2026-11-14', hosts: { 'futcoin.es': [page('comprar monedas fc 27')] }, headline: { 'www.futcoin.es': [k('comprar monedas fc 27', 'main', 80), k('monedas fc 27', 'secondary', 150)] } }, publicKey));
-    expect(keyMapHeadline(db).get('futcoin.es')?.map((x) => [x.key, x.ahrefs])).toEqual([['comprar monedas fc 27', 80], ['monedas fc 27', 150]]);
+    const k = (key: string, role: 'main' | 'secondary', volume: number) => ({ country: 'ES', url: '/', key, role, volume, avg: volume });
+    importKeyMap(db, encryptKeyMap({ mapUpdated: '2026-11-09', hosts: { 'futcoin.es': [page('comprar monedas fc 27')] }, headline: { 'futcoin.es': [k('comprar monedas fc 27', 'main', 0)] } }, publicKey));
+    expect(keyMapHeadline(db).get('futcoin.es')).toEqual([k('comprar monedas fc 27', 'main', 0)]);
+    importKeyMap(db, encryptKeyMap({ mapUpdated: '2026-11-14', hosts: { 'futcoin.es': [page('comprar monedas fc 27')] }, headline: { 'www.futcoin.es': [k('comprar monedas fc 27', 'main', 590), k('monedas fc 27', 'secondary', 790)] } }, publicKey));
+    expect(keyMapHeadline(db).get('futcoin.es')?.map((x) => [x.key, x.volume])).toEqual([['comprar monedas fc 27', 590], ['monedas fc 27', 790]]);
   });
 
   it('карта под чужим ключом или пустая — не берётся', () => {

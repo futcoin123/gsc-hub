@@ -341,6 +341,11 @@
   .app-table.is-roomy > tbody > tr.is-alt {
     @apply bg-line-soft/70;
   }
+  /* Всё в строке — по верху (просьба владелицы 17.11.2026): название сайта на
+     одной линии с первой строкой ключей, а не посередине высокой строки. */
+  .app-table.is-top > tbody > tr > td {
+    @apply align-top;
+  }
   .app-table.is-roomy > tbody > tr.is-selected {
     @apply bg-acc-t/60;
   }

@@ -17,7 +17,8 @@
   import { selecting } from '$lib/utils/selecting';
 
   // Ключи карты по странам: у сайта с языковыми папками — главный и свои
-  // второстепенные у каждой страны. В скобках — частотность Ahrefs по карте.
+  // второстепенные у каждой страны. В скобках — запросов в Google за сентябрь
+  // 2026 по карте («Сент.», первая цифра в виде «План»).
   type KM = NonNullable<(typeof data.keyMap)[string]>;
   function byCountry(km: KM) {
     const out = new Map<string, { main: KM['main']; secondary: KM['secondary'] }>();
@@ -28,8 +29,8 @@
   }
   /** Консоль коротко: первые буквы адреса или названия. */
   const short = (v: string) => (v.length > 5 ? v.slice(0, 4) + '…' : v);
-  const ahrefs = (v: number | null) => (v == null ? '—' : v.toLocaleString('ru-RU'));
-  const ahrefsTitle = (v: number | null) => (v == null ? 'в Ahrefs данных нет' : `Ahrefs: ${v.toLocaleString('ru-RU')} запросов в месяц`);
+  const vol = (v: number) => v.toLocaleString('ru-RU');
+  const volTitle = (k: { volume: number; avg: number }) => `Запросов в Google по карте: ${vol(k.volume)} в сентябре 2026, в среднем ${vol(k.avg)} в месяц за год`;
 
   let { data } = $props();
   $effect.pre(() => useLabels(data.labels));
@@ -110,12 +111,12 @@
       <p class="p-3 text-ink-3">Нет сайтов. Отметьте консоль галочкой «Использовать» на странице <a class="text-acc underline" href="/">Accounts</a>.</p>
     {:else}
       <div class="overflow-x-auto">
-        <table class="app-table">
+        <table class="app-table is-roomy is-top">
           <thead>
             <tr>
               <SortTh {sort} k="site" label="Сайт" />
               <SortTh {sort} k="account" label="Консоль" title="Консоль Search Console сайта — первые буквы, полностью — при наведении" />
-              <SortTh {sort} k="map" label="Карта ключей" title="Главный ключ сайта и сколько второстепенных — из «Карты ключей FUT». Сайт берётся из карты один раз и потом не меняется; сайты, которых в карте ещё нет, хаб ищет в ней раз в 3 дня" />
+              <SortTh {sort} k="map" label="Карта ключей" title="Главный ключ сайта (зелёный) и до трёх продающих второстепенных — из «Карты ключей FUT», вид «План». В скобках — запросов в Google за сентябрь 2026 («Сент.» карты). Гайды, инструкции и ключи без запросов не показываются" />
               <SortTh {sort} k="impressions" label="Impr" num />
               <SortTh {sort} k="clicks" label="Clicks" num />
               <SortTh {sort} k="ctr" label="CTR" num />
@@ -128,10 +129,10 @@
             </tr>
           </thead>
           <tbody>
-            {#each sites as s (key(s))}
+            {#each sites as s, i (key(s))}
               {@const k = key(s)}
               {@const km = data.keyMap[s.siteUrl]}
-              <tr class="cursor-pointer" class:is-selected={open.has(k)} onclick={() => !selecting() && toggle(k)}>
+              <tr class="is-site cursor-pointer" class:is-alt={i % 2 === 1} class:is-selected={open.has(k)} onclick={() => !selecting() && toggle(k)}>
                 <td class="pii whitespace-nowrap font-semibold text-ink">
                   <span class="flex items-center gap-1">
                     <svg viewBox="0 0 16 16" class="h-3 w-3 shrink-0 text-ink-4 transition-transform {open.has(k) ? 'rotate-90' : ''}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
@@ -149,8 +150,8 @@
                       {#each byCountry(km) as g (g.cc)}
                         <span class="flex flex-wrap items-center gap-1">
                           {#if km.main.length > 1}<span class="app-num w-6 text-[10px] text-ink-4" title={g.main[0]?.geo ?? g.secondary[0]?.geo}>{g.cc}</span>{/if}
-                          {#each g.main as m (m.key + m.url)}<span class="badge badge-ok" title="Главный ключ по «Карте ключей FUT» · {m.url} · {m.geo} · {ahrefsTitle(m.ahrefs)}">{m.key} ({ahrefs(m.ahrefs)})</span>{/each}
-                          {#each g.secondary as s2 (s2.key + s2.url)}<span class="badge badge-muted" title="Второстепенный ключ по «Карте ключей FUT» · {s2.url} · {s2.geo} · {ahrefsTitle(s2.ahrefs)}">{s2.key} ({ahrefs(s2.ahrefs)})</span>{/each}
+                          {#each g.main as m (m.key + m.url)}<span class="badge badge-ok" title="Главный ключ по «Карте ключей FUT» · {m.url} · {m.geo} · {volTitle(m)}">{m.key} ({vol(m.volume)})</span>{/each}
+                          {#each g.secondary as s2 (s2.key + s2.url)}<span class="badge badge-muted" title="Второстепенный ключ по «Карте ключей FUT» · {s2.url} · {s2.geo} · {volTitle(s2)}">{s2.key} ({vol(s2.volume)})</span>{/each}
                         </span>
                       {/each}
                     </span>

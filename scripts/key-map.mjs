@@ -8,8 +8,9 @@
 // (главный ключ сайта) и «второстепенный» — вид «Сайты» карты; плюс страницы
 // из плана, которые уже внесены на сайт. К каждому ключу — его варианты из
 // группы карты (Google считает их тем же запросом). Отдельно — headline:
-// для строки сайта главный ключ и 1–3 второстепенных с частотностью Ahrefs
-// (buildHeadline); его сервер берёт из каждой новой карты целиком.
+// для строки сайта главный ключ и до 3 продающих второстепенных с запросами
+// (вид «План», цифра «Сент.»; buildHeadline); его сервер берёт из каждой новой
+// карты целиком.
 //
 // Репозиторий хаба открыт всем, поэтому карта лежит в нём зашифрованной
 // открытым ключом хаба (/key-map/public-key): прочитать её может только
@@ -92,55 +93,77 @@ export function buildKeyMap(data) {
 }
 
 // Ключи сайта для строки сайта в «Ключах сайтов» (просьба владелицы
-// 14.11.2026): главный ключ и только настоящие второстепенные — 1–3, с
-// частотностью Ahrefs из карты. Первые страницы сайтов делались без ключей,
-// у таких страниц Ahrefs 0 — их не берём. Берётся из вида «Сайты» карты
-// (страницы «основной» и «второстепенный»), частотность — колонка «Ahrefs»
-// группы ключа (в строке группы r[3]).
+// 14.11.2026, уточнено 17.11.2026): главный ключ и только настоящие
+// второстепенные — до трёх продающих, у которых есть запросы, с первой цифрой
+// карты в скобках («Сент.» — запросов в Google за сентябрь 2026). Берётся вид
+// «План» карты: страницы существующих сайтов, сделанные и внесённые. Гайды,
+// инструкции и инфо-страницы (группа «И-», инфо) сюда не идут — по ним ссылки не
+// покупают; ключи с нулём запросов — тоже.
 export const HEADLINE_SECONDARY = 3;
 const plain = (s) => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-/**
- * Частотность Ahrefs ключа в его группе карты; null — данных Ahrefs нет (ключа
- * нет в группе или в выгрузке Ahrefs, там 0). Серая строка группы (r[6] = 0,
- * «Google: один запрос») — тот же запрос, что строка выше: у неё Ahrefs часто
- * 0, тогда берём частотность той строки («futcoins» → «fut coins»).
- */
-function ahrefsOf(key, g) {
+/** Запросы ключа в его группе карты (Сент. и Ср.); у серой строки — как у строки выше. */
+function volumeOf(key, g) {
   const rows = g?.r ?? [];
   let best = null;
   rows.forEach((r, i) => {
     if (plain(r[0]) !== plain(key)) return;
-    let v = Number(r[3]) || 0;
-    if (!v && !r[6]) for (let j = i - 1; j >= 0; j--) if (rows[j][6]) { v = Number(rows[j][3]) || 0; break; }
-    if (v > 0) best = Math.max(best ?? 0, v);
+    let row = r;
+    if (!Number(r[1]) && !r[6]) for (let j = i - 1; j >= 0; j--) if (rows[j][6]) { row = rows[j]; break; }
+    const v = { volume: Number(row[1]) || 0, avg: Number(row[2]) || 0 };
+    if (!best || v.volume > best.volume) best = v;
   });
   return best;
 }
-/** @returns {Record<string, { country: string, url: string, key: string, role: 'main' | 'secondary', ahrefs: number | null }[]>} */
+/** @returns {Record<string, { country: string, url: string, key: string, role: 'main' | 'secondary', volume: number, avg: number }[]>} */
 export function buildHeadline(data) {
   const out = {};
+  const pick = (country, list) => {
+    const byHost = new Map();
+    for (const x of list) (byHost.get(x.host) ?? byHost.set(x.host, []).get(x.host)).push(x);
+    for (const [host, items] of byHost) {
+      const main = items.filter((x) => x.role === 'main').slice(0, 1);
+      const taken = new Set(main.map((m) => m.key));
+      const secondary = [];
+      for (const x of items.filter((y) => y.role === 'secondary' && y.com && y.volume > 0).sort((a, b) => b.volume - a.volume || a.key.localeCompare(b.key))) {
+        if (taken.has(x.key) || secondary.length >= HEADLINE_SECONDARY) continue;
+        taken.add(x.key);
+        secondary.push(x);
+      }
+      if (!main.length && !secondary.length) continue;
+      (out[host] ??= []).push(...[...main, ...secondary].map(({ url, key, role, volume, avg }) => ({ country, url, key, role, volume, avg })));
+    }
+  };
   for (const c of data.countries ?? []) {
     const groups = new Map((c.groups ?? []).map((g) => [g.id, g]));
     const groupByHead = new Map((c.groups ?? []).map((g) => [norm(g.h), g]));
-    const bySite = new Map();
+    // Вид «План»: страницы ваших сайтов, которые уже есть на сайте.
+    const planned = [];
+    for (const r of c.plan?.rows ?? []) {
+      if (!String(r.status ?? '').startsWith('есть') || r.done === false || !norm(r.main)) continue;
+      const g = groupByHead.get(norm(r.group));
+      planned.push({
+        host: hostOf(r.site),
+        url: fullUrl(r.site, r.url, r.todo),
+        key: norm(r.main),
+        role: String(r.kind ?? '').startsWith('главная') ? 'main' : 'secondary',
+        volume: Number(r.sep) || 0,
+        avg: Number(r.avg) || 0,
+        com: g?.k === 'com'
+      });
+    }
+    pick(c.id, planned);
+    // Сайт, которого нет в «Плане», — по виду «Сайты» (основной / второстепенный).
+    const inPlan = new Set(planned.map((x) => x.host));
+    const pages = [];
     for (const p of c.pages ?? []) {
       const r = String(p.role ?? '');
       const role = r.startsWith('основной') && !r.includes('бронь') ? 'main' : r.startsWith('второстепенный') ? 'secondary' : null;
-      if (!role || !norm(p.key) || !p.url || p.url === '—') continue;
       const host = hostOf(p.site);
-      const list = bySite.get(host) ?? (bySite.set(host, []), bySite.get(host));
-      if (list.some((x) => x.key === norm(p.key))) continue;
-      list.push({ country: c.id, url: fullUrl(p.site, p.url), key: norm(p.key), role, ahrefs: ahrefsOf(p.key, groups.get(p.gid) ?? groupByHead.get(norm(p.group))) });
+      if (!role || inPlan.has(host) || !norm(p.key) || !p.url || p.url === '—') continue;
+      const v = volumeOf(p.key, groups.get(p.gid) ?? groupByHead.get(norm(p.group)));
+      pages.push({ host, url: fullUrl(p.site, p.url), key: norm(p.key), role, volume: v?.volume ?? 0, avg: v?.avg ?? 0, com: String(p.gid ?? '').startsWith('П') });
     }
-    for (const [host, list] of bySite) {
-      const main = list.filter((x) => x.role === 'main');
-      const secondary = list
-        .filter((x) => x.role === 'secondary' && x.ahrefs)
-        .sort((a, b) => b.ahrefs - a.ahrefs || a.key.localeCompare(b.key))
-        .slice(0, HEADLINE_SECONDARY);
-      if (!main.length && !secondary.length) continue;
-      (out[host] ??= []).push(...main, ...secondary);
-    }
+    pick(c.id, pages);
   }
   return Object.fromEntries(Object.keys(out).sort().map((h) => [h, out[h]]));
 }
@@ -206,7 +229,7 @@ async function main(argv) {
   const hosts = Object.keys(map.hosts);
   console.log(`Карта от ${map.mapUpdated}: ${hosts.length} сайтов, ${hosts.reduce((a, h) => a + map.hosts[h].length, 0)} страниц с ключами.`);
   for (const [c, keys] of Object.entries(map.topics)) console.log(`  ключи темы ${c}: ${keys.length} (${keys.slice(0, 4).join(', ')}…)`);
-  const vol = (x) => `${x.key} (${x.ahrefs ?? '—'})`;
+  const vol = (x) => `${x.key} (${x.volume})`;
   for (const [h, keys] of Object.entries(map.headline)) {
     const main = keys.filter((x) => x.role === 'main');
     const sec = keys.filter((x) => x.role === 'secondary');

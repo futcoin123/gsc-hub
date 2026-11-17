@@ -28,7 +28,7 @@ interface PlainMap {
   hosts: Record<string, MapPage[]>;
   /** Ключи темы по стране карты (IT, ES…), от частых к редким. */
   topics?: Record<string, string[]>;
-  /** Главный и 1–3 второстепенных ключа сайта с частотностью Ahrefs — для строки сайта. */
+  /** Главный и до 3 продающих второстепенных ключей сайта с запросами («Сент.») — для строки сайта. */
   headline?: Record<string, MapKey[]>;
 }
 interface State {
@@ -143,7 +143,7 @@ export function keyMapTopics(db: Db): Record<string, string[]> {
   return Object.fromEntries(rows.map((r) => [r.country, JSON.parse(r.keys) as string[]]));
 }
 
-/** Строка сайта: host → главный и 1–3 второстепенных ключа с частотностью Ahrefs. */
+/** Строка сайта: host → главный и до 3 продающих второстепенных ключей с запросами («Сент.» карты). */
 export function keyMapHeadline(db: Db): Map<string, MapKey[]> {
   syncKeyMap(db);
   const rows = db.prepare('SELECT host, keys FROM key_map_headline').all() as { host: string; keys: string }[];
