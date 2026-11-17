@@ -75,6 +75,10 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Sites: own counter sites without Search Console are listed too.** A row
+  with the domain, "без консоли · счётчик на сайте", the group cell, the site,
+  site: search and Bing links; no Google figures (dashes) and no expansion
+  (nothing to inspect without a console). The name links to Buttons.
 - **A new site gets its label by topic right away.** A FUT coins site (in the
   key map, or a domain about fut, fifa, fc coins, ut coins…) is labelled
   "futcoin" as soon as it shows up in Site keys, Dashboard or groups. A label

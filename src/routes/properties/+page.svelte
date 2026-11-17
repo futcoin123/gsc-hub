@@ -39,6 +39,7 @@
       .join(' ');
   }
   function detailHref(s: { siteUrl: string; accountId: string }) {
+    if (s.accountId === 'manual') return '/clicks';
     return `/properties/${encodeURIComponent(s.siteUrl)}?acc=${encodeURIComponent(s.accountId)}`;
   }
 
@@ -204,7 +205,7 @@
   let perAccount = $derived.by(() => {
     const map = new Map<string, { accountId: string; label: string; email: string; sites: number; clicks: number; impressions: number }>();
     for (const s of data.sites) {
-      if (hidden.has(keyOf(s))) continue;
+      if (hidden.has(keyOf(s)) || s.manual) continue;
       let a = map.get(s.accountId);
       if (!a) {
         a = { accountId: s.accountId, label: s.accountLabel ?? s.accountEmail, email: s.accountEmail, sites: 0, clicks: 0, impressions: 0 };
@@ -1227,13 +1228,13 @@
                 {@const subSt = submitStates.get(sKey)}
                 {@const bSt = bingStates.get(sKey)}
                 {@const iSt = indexnowStates.get(sKey)}
-                <tr class="cursor-pointer {s.hasIndexNow ? '' : 'bg-warn-t/60 hover:bg-warn-t'} {isHidden ? 'is-hidden-row' : ''}" class:is-selected={expanded} class:has-status={!!(subSt || bSt || iSt)} onclick={() => !selecting() && toggleSite(s)} title={s.hasIndexNow ? undefined : 'Нет IndexNow-ключа ({key}.txt) — не настроен для Bing/IndexNow'}>
+                <tr class="{s.manual ? '' : 'cursor-pointer'} {s.hasIndexNow ? '' : 'bg-warn-t/60 hover:bg-warn-t'} {isHidden ? 'is-hidden-row' : ''}" class:is-selected={expanded} class:has-status={!!(subSt || bSt || iSt)} onclick={() => !selecting() && !s.manual && toggleSite(s)} title={s.hasIndexNow ? undefined : 'Нет IndexNow-ключа ({key}.txt) — не настроен для Bing/IndexNow'}>
                   <td class="min-w-[14rem]">
                     <div class="flex items-center gap-1.5 whitespace-nowrap">
-                      {@render chevron(expanded)}
+                      {#if s.manual}<span class="inline-block w-3"></span>{:else}{@render chevron(expanded)}{/if}
                       <!-- Имя ведёт на страницу сайта внутри хаба: туда ходят чаще, чем на сам сайт.
                            Внешний сайт — отдельной иконкой ↗, как у остальных внешних ссылок строки. -->
-                      <a class="pii font-semibold text-ink hover:text-acc hover:underline" href={detailHref(s)} title="Site analytics — striking distance, cannibalization, decay, CTR, health" onclick={(e) => e.stopPropagation()}>{displaySite(s.siteUrl)}</a>
+                      <a class="pii font-semibold text-ink hover:text-acc hover:underline" href={detailHref(s)} title="Site analytics — striking distance, cannibalization, decay, CTR, health" onclick={(e) => e.stopPropagation()}>{s.manual ? siteDomain(s.siteUrl) : displaySite(s.siteUrl)}</a>
                       <a
                         class="inline-flex h-4 items-center text-ink-4 hover:text-acc print:hidden"
                         href={siteHref(s.siteUrl)}
@@ -1243,7 +1244,7 @@
                         aria-label="Open site in a new tab"
                         onclick={(e) => e.stopPropagation()}
                       ><svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5 7 9"/></svg></a>
-                      <a
+                      {#if !s.manual}<a
                         class="badge badge-muted h-4 px-1 py-0 text-[10px] hover:bg-acc-t hover:text-acc print:hidden"
                         href={gscHref(s.siteUrl, s.accountEmail)}
                         target="_blank"
@@ -1251,7 +1252,7 @@
                         title="Открыть в Google Search Console ({s.accountEmail})"
                         aria-label="Open in Google Search Console"
                         onclick={(e) => e.stopPropagation()}
-                      >GSC</a>
+                      >GSC</a>{/if}
                       <a
                         class="inline-flex h-4 items-center opacity-60 transition-opacity hover:opacity-100 print:hidden"
                         href={siteSearchHref(s.siteUrl)}
@@ -1272,7 +1273,7 @@
                       ><img src={bingIcon} alt="Bing" class="h-3.5 w-auto" /></a>
                     </div>
                     <div class="pii truncate pl-[18px] text-[11px] text-ink-3">
-                      {s.accountLabel ?? s.accountEmail}{#if s.accountLabel}<span class="text-ink-4"> ({s.accountEmail})</span>{/if}
+                      {#if s.manual}<span title="Ваш сайт со счётчиком, которого ещё нет в Search Console: цифры — по счётчику на «Кнопках» и в Dashboard">без консоли · счётчик на сайте</span>{:else}{s.accountLabel ?? s.accountEmail}{#if s.accountLabel}<span class="text-ink-4"> ({s.accountEmail})</span>{/if}{/if}
                     </div>
                   </td>
                   <td class="print:hidden"><SiteGroupCell siteUrl={s.siteUrl} /></td>
@@ -1294,7 +1295,7 @@
                     <td class="num app-num hidden text-ink-4 sm:table-cell" title={s.summaryError ?? ''}>—</td>
                     <td class="num app-num hidden text-ink-4 md:table-cell" title={s.summaryError ?? ''}>—</td>
                     <td class="num app-num text-ink-4" title={s.summaryError ?? ''}>
-                      <span class="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-dn align-middle" title={s.summaryError ?? 'error'}></span>—
+                      {#if !s.manual}<span class="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-dn align-middle" title={s.summaryError ?? 'error'}></span>{/if}—
                     </td>
                   {/if}
                   <!-- Кнопки отправки sitemap / Bing / IndexNow / CSV убраны по просьбе пользователя;

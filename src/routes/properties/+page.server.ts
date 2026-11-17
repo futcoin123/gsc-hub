@@ -7,6 +7,8 @@ import { listIndexNowHosts } from '$lib/server/indexnow';
 import { listSiteDates } from '$lib/server/site_dates';
 import { siteToHost, getBing } from '$lib/server/bing';
 import { requireAdmin } from '$lib/server/guard';
+import { counterOnlyHosts } from '$lib/server/own-sites';
+import { manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
 
 const SORT_FIELDS = ['clicks', 'impressions', 'ctr', 'position', 'site', 'account', 'date'] as const;
 type SortField = (typeof SORT_FIELDS)[number];
@@ -32,7 +34,7 @@ function parseDir(raw: string | null): SortDir {
   return raw === 'asc' ? 'asc' : 'desc';
 }
 
-type SiteWithMeta = SiteWithSummary & { createdAt: number | null };
+type SiteWithMeta = SiteWithSummary & { createdAt: number | null; manual: boolean };
 
 function compareSites(a: SiteWithMeta, b: SiteWithMeta, field: SortField, dir: SortDir): number {
   // Sites with no known creation date always go to the bottom.
@@ -88,9 +90,28 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       ...s,
       hasIndexNow: indexNowHosts.has(host),
       bing: bing.traffic.get(host) ?? null,
-      createdAt: siteDates.get(host) ?? null
+      createdAt: siteDates.get(host) ?? null,
+      manual: false
     };
   });
+  // Свои сайты со счётчиком, которых ещё нет в Search Console (просьба владелицы
+  // 17.11.2026: «в Sites тоже все сайты со счётчиком»): цифр Google нет, Bing и
+  // IndexNow — по домену, как у остальных.
+  for (const h of await counterOnlyHosts(db(), sitesResult.sites.map((s) => siteToHost(s.siteUrl)))) {
+    enriched.push({
+      siteUrl: manualSiteUrl(h),
+      permissionLevel: '',
+      accountId: MANUAL_ACCOUNT,
+      accountEmail: '',
+      accountLabel: null,
+      summary: null,
+      summaryError: 'Сайта нет в Search Console — цифры по счётчику на сайте на «Кнопках» и в Dashboard',
+      hasIndexNow: indexNowHosts.has(h),
+      bing: bing.traffic.get(h) ?? null,
+      createdAt: siteDates.get(h) ?? null,
+      manual: true
+    });
+  }
   const sites = enriched.sort((a, b) => compareSites(a, b, sort, dir));
 
   // Merge & dedupe errors by accountId across all three calls.
