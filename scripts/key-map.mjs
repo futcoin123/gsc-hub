@@ -101,20 +101,26 @@ export function buildKeyMap(data) {
 // покупают; ключи с нулём запросов — тоже.
 export const HEADLINE_SECONDARY = 3;
 const plain = (s) => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-/** Запросы ключа в его группе карты (Сент. и Ср.); у серой строки — как у строки выше. */
+/**
+ * Запросы ключа в его группе карты: Сент., Ср. и Ahrefs (r[3]). Серая строка
+ * группы («Google: один запрос») — тот же запрос, что строка выше: если у неё
+ * цифры 0, берём цифры той строки. ahrefs null — в Ahrefs данных нет.
+ */
 function volumeOf(key, g) {
   const rows = g?.r ?? [];
   let best = null;
   rows.forEach((r, i) => {
     if (plain(r[0]) !== plain(key)) return;
-    let row = r;
-    if (!Number(r[1]) && !r[6]) for (let j = i - 1; j >= 0; j--) if (rows[j][6]) { row = rows[j]; break; }
-    const v = { volume: Number(row[1]) || 0, avg: Number(row[2]) || 0 };
+    let up = null;
+    if (!r[6]) for (let j = i - 1; j >= 0; j--) if (rows[j][6]) { up = rows[j]; break; }
+    const pickNum = (k) => Number(r[k]) || Number(up?.[k]) || 0;
+    const a = pickNum(3);
+    const v = { volume: pickNum(1), avg: pickNum(2), ahrefs: a > 0 ? a : null };
     if (!best || v.volume > best.volume) best = v;
   });
   return best;
 }
-/** @returns {Record<string, { country: string, url: string, key: string, role: 'main' | 'secondary', volume: number, avg: number }[]>} */
+/** @returns {Record<string, { country: string, url: string, key: string, role: 'main' | 'secondary', volume: number, avg: number, ahrefs: number | null }[]>} */
 export function buildHeadline(data) {
   const out = {};
   const pick = (country, list) => {
@@ -130,7 +136,7 @@ export function buildHeadline(data) {
         secondary.push(x);
       }
       if (!main.length && !secondary.length) continue;
-      (out[host] ??= []).push(...[...main, ...secondary].map(({ url, key, role, volume, avg }) => ({ country, url, key, role, volume, avg })));
+      (out[host] ??= []).push(...[...main, ...secondary].map(({ url, key, role, volume, avg, ahrefs }) => ({ country, url, key, role, volume, avg, ahrefs: ahrefs ?? null })));
     }
   };
   for (const c of data.countries ?? []) {
@@ -148,6 +154,7 @@ export function buildHeadline(data) {
         role: String(r.kind ?? '').startsWith('главная') ? 'main' : 'secondary',
         volume: Number(r.sep) || 0,
         avg: Number(r.avg) || 0,
+        ahrefs: volumeOf(r.main, g)?.ahrefs ?? null,
         com: g?.k === 'com'
       });
     }
@@ -161,7 +168,7 @@ export function buildHeadline(data) {
       const host = hostOf(p.site);
       if (!role || inPlan.has(host) || !norm(p.key) || !p.url || p.url === '—') continue;
       const v = volumeOf(p.key, groups.get(p.gid) ?? groupByHead.get(norm(p.group)));
-      pages.push({ host, url: fullUrl(p.site, p.url), key: norm(p.key), role, volume: v?.volume ?? 0, avg: v?.avg ?? 0, com: String(p.gid ?? '').startsWith('П') });
+      pages.push({ host, url: fullUrl(p.site, p.url), key: norm(p.key), role, volume: v?.volume ?? 0, avg: v?.avg ?? 0, ahrefs: v?.ahrefs ?? null, com: String(p.gid ?? '').startsWith('П') });
     }
     pick(c.id, pages);
   }

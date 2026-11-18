@@ -68,6 +68,8 @@ export interface MapKey {
   volume: number;
   /** «Ср.» карты — в среднем за 12 месяцев. */
   avg: number;
+  /** Частотность Ahrefs по карте; null — данных Ahrefs нет (карта до 18.11.2026 — тоже). */
+  ahrefs?: number | null;
 }
 
 /**

@@ -8,6 +8,14 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Added
+- **"Ключи карты" (map keywords) section.** The main and secondary keywords of
+  the FUT key map in one table: keyword, country, volume (September Google and
+  Ahrefs), the site and page that should rank, the site's Google position over
+  7 days (impressions, clicks), your other sites in the same country for the
+  keyword (red when above, with their own map role), anchors bought and
+  planned (and bought for other sites), and what is wrong: not in Google,
+  another own site above, Google ranks another page, below position 10.
+  Filters by country, role and "problems only"; every column sorts.
 - **Back-to-top arrow across the panel.** A round button on the right, a little
   above the bottom edge, shows up after a short scroll and takes you back to
   the top.
