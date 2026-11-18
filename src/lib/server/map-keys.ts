@@ -50,6 +50,11 @@ export interface MapKeyRow {
   clicks: number;
   /** Страница, которую Google показывает по ключу. */
   rankPage: string | null;
+  /**
+   * Страница по карте, когда Google чаще показывает другую: её собственное место
+   * в стране ключа; null — по ключу она не показывается вовсе.
+   */
+  mapPage: { position: number; impressions: number; clicks: number } | null;
   rivals: MapKeyRival[];
   /** Ссылок на этот ключ этому сайту: куплено (зафиксированные группы) и в незафиксированных. */
   bought: number;
@@ -100,10 +105,23 @@ export function joinMapKeys(input: {
       // Лучшая строка каждого сайта по ключу и его вариантам (больше показов) — в стране ключа.
       const cc = GSC_COUNTRY[mk.country] ?? mk.country.toLowerCase();
       const byHost = new Map<string, QueryOwner>();
+      // Страницы сайта по карте по ключу и вариантам: показы и клики — сумма,
+      // место — среднее, взвешенное по показам.
+      const myPages = new Map<string, { position: number; impressions: number; clicks: number }>();
       for (const q of queries) {
         for (const o of owners.get(`${cc}\t${q}`) ?? []) {
           const cur = byHost.get(o.host);
           if (!cur || o.impressions > cur.impressions) byHost.set(o.host, o);
+          if (o.host !== host) continue;
+          for (const pg of o.pages ?? [{ page: o.page, position: o.position, impressions: o.impressions, clicks: o.clicks }]) {
+            const path = pathOf(pg.page);
+            const was = myPages.get(path);
+            if (!was) myPages.set(path, { position: pg.position, impressions: pg.impressions, clicks: pg.clicks });
+            else {
+              const imp = was.impressions + pg.impressions;
+              myPages.set(path, { position: imp ? (was.position * was.impressions + pg.position * pg.impressions) / imp : was.position, impressions: imp, clicks: was.clicks + pg.clicks });
+            }
+          }
         }
       }
       const me = byHost.get(host) ?? null;
@@ -146,6 +164,7 @@ export function joinMapKeys(input: {
         impressions: me?.impressions ?? 0,
         clicks: me?.clicks ?? 0,
         rankPage: me ? pathOf(me.page) : null,
+        mapPage: me && pathOf(me.page) !== mk.url ? (myPages.get(mk.url) ?? null) : null,
         rivals,
         bought,
         planned,

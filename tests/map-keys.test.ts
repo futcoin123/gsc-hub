@@ -30,7 +30,7 @@ describe('ключи карты', () => {
       ['gbr\tfut coins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 12, 40), o('fccoins.co.uk', 'https://fccoins.co.uk/', 8, 30)]],
       // futcoin.es 3-й — но в Испании: в британскую строку не попадает.
       ['esp\tfut coins', [o('futcoin.es', 'https://futcoin.es/', 3, 9)]],
-      ['gbr\tcheap fut coins', [o('fut-coins.co.uk', 'https://fut-coins.co.uk/cheap-fut-coins-uk/', 6), o('futcoins.co.uk', 'https://futcoins.co.uk/fut-coin/', 15)]]
+      ['gbr\tcheap fut coins', [o('fut-coins.co.uk', 'https://fut-coins.co.uk/cheap-fut-coins-uk/', 6), { ...o('futcoins.co.uk', 'https://futcoins.co.uk/fut-coin/', 15, 30), pages: [{ page: 'https://futcoins.co.uk/fut-coin/', position: 15, impressions: 30, clicks: 0 }, { page: 'https://futcoins.co.uk/cheap-fut-coins/', position: 25, impressions: 4, clicks: 1 }] }]]
     ]),
     links: new Map([
       ['futcoins', [l('futcoins.co.uk', 5, true, 100), l('futcoins.co.uk', 3, false), l('fccoins.co.uk', 2, true)]]
@@ -55,6 +55,9 @@ describe('ключи карты', () => {
     const r = row('cheap fut coins');
     expect(r.flags).toEqual(['rival-above', 'other-page']);
     expect(r.rankPage).toBe('/fut-coin/');
+    // Страница по карте тоже видна по ключу — её собственное место.
+    expect(r.mapPage).toEqual({ position: 25, impressions: 4, clicks: 1 });
+    expect(row('futcoins').mapPage).toBeNull();
     expect(r.rivals[0]).toMatchObject({ host: 'fut-coins.co.uk', mapRole: 'main', above: true });
   });
 

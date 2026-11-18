@@ -186,7 +186,12 @@
                   {#if r.boughtElsewhere.length}<div class="text-[11px] text-warn" title="На этот же ключ куплено другим вашим сайтам той же страны: {r.boughtElsewhere.map((b) => `${b.host} — ${b.qty}`).join(', ')}">другим: {fmt(r.boughtElsewhere.reduce((a, b) => a + b.qty, 0))}</div>{/if}
                 </td>
                 <td class="text-xs">
-                  {#each r.flags as f (f)}<div class={f === 'no-console' ? 'text-ink-4' : 'text-warn'} title={FLAG[f][1]}>{FLAG[f][0]}{f === 'other-page' && r.rankPage ? `: ${r.rankPage}` : ''}</div>{/each}
+                  {#each r.flags as f (f)}
+                    <div class={f === 'no-console' ? 'text-ink-4' : 'text-warn'} title={FLAG[f][1]}>{FLAG[f][0]}{f === 'other-page' && r.rankPage ? `: ${r.rankPage}${r.position !== null ? ` (${pos(r.position)})` : ''}` : ''}</div>
+                    {#if f === 'other-page'}
+                      <div class="text-ink-3" title="Место страницы из карты по этому ключу в стране ключа">страница по карте {r.url}: {#if r.mapPage}<span class={posClass(r.mapPage.position)}>{pos(r.mapPage.position)}</span> · {fmt(r.mapPage.impressions)} пок.{:else}по ключу не показывается{/if}</div>
+                    {/if}
+                  {/each}
                   {#if !r.flags.length && r.position !== null && r.position > 10}<div class="text-warn">ниже 10-го места</div>{/if}
                   {#if !r.flags.length && r.position !== null && r.position <= 10}<span class="text-up">в порядке</span>{/if}
                 </td>

@@ -1607,6 +1607,8 @@ export interface QueryOwner {
   position: number;
   impressions: number;
   clicks: number;
+  /** Все страницы сайта с показами по ключу (только fetchQueryHostsByCountry). */
+  pages?: { page: string; position: number; impressions: number; clicks: number }[];
 }
 
 /** Ключ → все ваши сайты с показами по нему (и один сайт тоже). */
@@ -1655,7 +1657,7 @@ export async function fetchQueryHosts(db: Db, days = 28): Promise<Map<string, Qu
  * Австрии, а не в Британии (раздел «Ключи карты», 18.11.2026). Кэш — час.
  */
 export async function fetchQueryHostsByCountry(db: Db, days = 28): Promise<Map<string, QueryOwner[]>> {
-  return gscCached(`qhosts-cc:${days}`, async () => {
+  return gscCached(`qhosts-cc2:${days}`, async () => {
     const accounts = listAccounts(db).filter(isUsableAccount);
     const perAccount = await Promise.allSettled(accounts.map((a) => listSitesForAccount(db, a)));
     const pairs: { acc: AccountRow; site: SiteRow }[] = [];
@@ -1681,9 +1683,11 @@ export async function fetchQueryHostsByCountry(db: Db, days = 28): Promise<Map<s
         const k = `${cc}\t${q}`;
         const hosts = byKey.get(k) ?? new Map<string, QueryOwner>();
         const cur = hosts.get(host);
+        const pg = { page: row.keys[1] ?? '', position: row.position, impressions: row.impressions, clicks: row.clicks };
+        const pages = [...(cur?.pages ?? []), pg];
         if (!cur || row.impressions > cur.impressions) {
-          hosts.set(host, { host, siteUrl: site.siteUrl, page: row.keys[1] ?? '', accountId: acc.id, position: row.position, impressions: row.impressions, clicks: row.clicks });
-        }
+          hosts.set(host, { host, siteUrl: site.siteUrl, page: pg.page, accountId: acc.id, position: row.position, impressions: row.impressions, clicks: row.clicks, pages });
+        } else cur.pages = pages;
         byKey.set(k, hosts);
       }
     });

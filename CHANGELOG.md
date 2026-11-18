@@ -95,6 +95,9 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Map keys: when Google ranks another page, the map page's own place shows
+  too.** Next to the ranking page and its place — "страница по карте /…" with
+  its place and impressions, or that it does not show for the keyword.
 - **Map keys: positions are per the keyword's country.** The Search Console
   average across all countries put futcoin.at (11th) and fut-coins.es (14th)
   next to the British "fifa coins" — their places in Austria and Spain. Each
