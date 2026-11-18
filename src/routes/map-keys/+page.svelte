@@ -21,7 +21,7 @@
   let err = $state<string | null>(null);
   onMount(async () => {
     try {
-      const r = await fetch('/map-keys/data');
+      const r = await fetch('/map-keys/rows', { headers: { accept: 'application/json' } });
       if (!r.ok) throw new Error((await r.text()).slice(0, 200) || `HTTP ${r.status}`);
       const j = await r.json();
       rows = j.rows ?? [];
