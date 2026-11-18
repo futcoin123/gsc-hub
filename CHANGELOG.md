@@ -95,6 +95,11 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Map keys: positions are per the keyword's country.** The Search Console
+  average across all countries put futcoin.at (11th) and fut-coins.es (14th)
+  next to the British "fifa coins" — their places in Austria and Spain. Each
+  site's place now counts only impressions in the keyword's country, and other
+  sites show only when they are seen there.
 - **Buttons: a site with a passed link check and no visitors is no longer
   marked "events dropped".** It now reads "связь есть, посетителей ещё не
   было"; a failed link check reads "ключ сайта не подходит".

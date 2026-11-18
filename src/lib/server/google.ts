@@ -1648,6 +1648,51 @@ export async function fetchQueryHosts(db: Db, days = 28): Promise<Map<string, Qu
   }, 60 * 60 * 1000);
 }
 
+/**
+ * То же по странам: «страна\tключ» → ваши сайты с показами по ключу именно в
+ * этой стране (страна — код Google: gbr, deu, aut…). Позиция Search Console без
+ * страны — средняя по всем странам: futcoin.at по «fifa coins» стоит 11-м в
+ * Австрии, а не в Британии (раздел «Ключи карты», 18.11.2026). Кэш — час.
+ */
+export async function fetchQueryHostsByCountry(db: Db, days = 28): Promise<Map<string, QueryOwner[]>> {
+  return gscCached(`qhosts-cc:${days}`, async () => {
+    const accounts = listAccounts(db).filter(isUsableAccount);
+    const perAccount = await Promise.allSettled(accounts.map((a) => listSitesForAccount(db, a)));
+    const pairs: { acc: AccountRow; site: SiteRow }[] = [];
+    perAccount.forEach((r, i) => {
+      if (r.status === 'fulfilled')
+        r.value.forEach((site) => {
+          if (site.permissionLevel !== 'siteUnverifiedUser') pairs.push({ acc: accounts[i], site });
+        });
+    });
+    const { startDate, endDate } = completedDayRange(days);
+    const perSite = await mapSettledLimit(pairs, ({ acc, site }) =>
+      searchAnalyticsQuery(db, acc, site.siteUrl, { startDate, endDate, dimensions: ['query', 'page', 'country'], rowLimit: 25000 })
+    );
+    const byKey = new Map<string, Map<string, QueryOwner>>();
+    perSite.forEach((r, i) => {
+      if (r.status !== 'fulfilled') return;
+      const { acc, site } = pairs[i];
+      const host = hostKey(site.siteUrl);
+      for (const row of r.value) {
+        const q = foldQuery(row.keys[0] ?? '');
+        const cc = (row.keys[2] ?? '').toLowerCase();
+        if (!q || !cc) continue;
+        const k = `${cc}\t${q}`;
+        const hosts = byKey.get(k) ?? new Map<string, QueryOwner>();
+        const cur = hosts.get(host);
+        if (!cur || row.impressions > cur.impressions) {
+          hosts.set(host, { host, siteUrl: site.siteUrl, page: row.keys[1] ?? '', accountId: acc.id, position: row.position, impressions: row.impressions, clicks: row.clicks });
+        }
+        byKey.set(k, hosts);
+      }
+    });
+    const out = new Map<string, QueryOwner[]>();
+    for (const [k, hosts] of byKey) out.set(k, [...hosts.values()].sort((a, b) => a.position - b.position));
+    return out;
+  }, 60 * 60 * 1000);
+}
+
 export async function fetchQueryOwners(db: Db, days = 28): Promise<Map<string, QueryOwner[]>> {
   const all = await fetchQueryHosts(db, days);
   const out = new Map<string, QueryOwner[]>();

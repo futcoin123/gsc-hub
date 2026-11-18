@@ -6,14 +6,17 @@
 //
 // Ключи — те же, что в колонке «Карта ключей» на «Ключах сайтов» (главный и до
 // трёх продающих второстепенных у сайта). Позиции — Search Console всех ваших
-// сайтов за последние OWNERS_DAYS дней (тот же расчёт, что «Мои другие сайты»).
+// сайтов за последние OWNERS_DAYS дней, в стране ключа: средняя позиция по всем
+// странам путала бы (futcoin.at 11-й по «fifa coins» — это Австрия, не Британия).
 import type { Db } from './db';
-import { fetchQueryHosts, fetchSiteGeos, listAllKnownSites, type QueryOwner } from './google';
+import { fetchQueryHostsByCountry, fetchSiteGeos, listAllKnownSites, type QueryOwner } from './google';
 import { keyMapAll, keyMapHeadline } from './key-map';
 import { linksByQuery, type QueryLink } from './group-items';
 import { foldQuery, hostKey } from '$lib/utils/fold-query';
-import { sameGeo } from '$lib/utils/site-geo';
 import { mapGeo, type KeyRole, type MapKey, type MapPage } from '$lib/utils/key-map';
+
+/** Страна карты → код страны Search Console. */
+export const GSC_COUNTRY: Record<string, string> = { DE: 'deu', AT: 'aut', CH: 'che', IT: 'ita', ES: 'esp', NL: 'nld', PL: 'pol', FR: 'fra', UK: 'gbr', US: 'usa' };
 import { OWNERS_DAYS } from '$lib/utils/owners';
 
 export type MapKeyFlag = 'no-console' | 'not-ranking' | 'rival-above' | 'other-page';
@@ -41,7 +44,7 @@ export interface MapKeyRow {
   volume: number;
   avg: number;
   ahrefs: number | null;
-  /** Позиция сайта по ключу (или его варианту) за OWNERS_DAYS дней; null — показов нет. */
+  /** Позиция сайта по ключу (или его варианту) в стране ключа за OWNERS_DAYS дней; null — показов там нет. */
   position: number | null;
   impressions: number;
   clicks: number;
@@ -69,6 +72,7 @@ const pathOf = (u: string) => {
 export function joinMapKeys(input: {
   headline: Map<string, MapKey[]>;
   pages: Map<string, MapPage[]>;
+  /** «страна\tключ» → сайты с показами в этой стране (fetchQueryHostsByCountry). */
   owners: Map<string, QueryOwner[]>;
   links: Map<string, QueryLink[]>;
   geos: Map<string, string[]> | null;
@@ -93,18 +97,21 @@ export function joinMapKeys(input: {
       // Варианты ключа из группы карты — тот же запрос для Google.
       const alts = (pages.get(host) ?? []).find((p) => foldQuery(p.key) === k)?.alts ?? [];
       const queries = [...new Set([k, ...alts.map(foldQuery)])];
-      // Лучшая строка каждого сайта по ключу и его вариантам (больше показов).
+      // Лучшая строка каждого сайта по ключу и его вариантам (больше показов) — в стране ключа.
+      const cc = GSC_COUNTRY[mk.country] ?? mk.country.toLowerCase();
       const byHost = new Map<string, QueryOwner>();
       for (const q of queries) {
-        for (const o of owners.get(q) ?? []) {
+        for (const o of owners.get(`${cc}\t${q}`) ?? []) {
           const cur = byHost.get(o.host);
           if (!cur || o.impressions > cur.impressions) byHost.set(o.host, o);
         }
       }
       const me = byHost.get(host) ?? null;
-      const near = (h: string) => sameGeo(geos?.get(host), geos?.get(h));
+      // Ссылки на тот же ключ другим сайтам — только сайтам этой страны: виден в
+      // ней по ключу или это его основная страна в Search Console.
+      const near = (h: string) => byHost.has(h) || (geos?.get(h) ?? []).includes(cc);
       const rivals: MapKeyRival[] = [...byHost.values()]
-        .filter((o) => o.host !== host && near(o.host))
+        .filter((o) => o.host !== host)
         .sort((a, b) => a.position - b.position)
         .map((o) => ({ host: o.host, page: pathOf(o.page), position: o.position, impressions: o.impressions, clicks: o.clicks, mapRole: roleOf(o.host, k), above: !me || o.position < me.position }));
       let bought = 0, planned = 0, lastBuy: number | null = null;
@@ -155,7 +162,7 @@ export function joinMapKeys(input: {
 export async function mapKeyRows(db: Db): Promise<{ rows: MapKeyRow[]; days: number; errors: string[] }> {
   const errors: string[] = [];
   const [owners, geos, known] = await Promise.all([
-    fetchQueryHosts(db, OWNERS_DAYS).catch((e) => (errors.push(`позиции Google: ${(e as Error).message}`), new Map<string, QueryOwner[]>())),
+    fetchQueryHostsByCountry(db, OWNERS_DAYS).catch((e) => (errors.push(`позиции Google: ${(e as Error).message}`), new Map<string, QueryOwner[]>())),
     fetchSiteGeos(db).catch(() => null),
     listAllKnownSites(db).catch(() => null)
   ]);

@@ -26,9 +26,11 @@ describe('ключи карты', () => {
     pages,
     owners: new Map([
       // «fut coins» — вариант «futcoins»: у futcoins.co.uk там больше показов.
-      ['futcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 18, 5)]],
-      ['fut coins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 12, 40), o('fccoins.co.uk', 'https://fccoins.co.uk/', 8, 30), o('futcoin.es', 'https://futcoin.es/', 3, 9)]],
-      ['cheap fut coins', [o('fut-coins.co.uk', 'https://fut-coins.co.uk/cheap-fut-coins-uk/', 6), o('futcoins.co.uk', 'https://futcoins.co.uk/fut-coin/', 15)]]
+      ['gbr\tfutcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 18, 5)]],
+      ['gbr\tfut coins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 12, 40), o('fccoins.co.uk', 'https://fccoins.co.uk/', 8, 30)]],
+      // futcoin.es 3-й — но в Испании: в британскую строку не попадает.
+      ['esp\tfut coins', [o('futcoin.es', 'https://futcoin.es/', 3, 9)]],
+      ['gbr\tcheap fut coins', [o('fut-coins.co.uk', 'https://fut-coins.co.uk/cheap-fut-coins-uk/', 6), o('futcoins.co.uk', 'https://futcoins.co.uk/fut-coin/', 15)]]
     ]),
     links: new Map([
       ['futcoins', [l('futcoins.co.uk', 5, true, 100), l('futcoins.co.uk', 3, false), l('fccoins.co.uk', 2, true)]]
@@ -38,7 +40,7 @@ describe('ключи карты', () => {
   });
   const row = (key: string) => rows.find((r) => r.key === key)!;
 
-  it('по частоте; позиция — по ключу и его вариантам; другие сайты только той же страны', () => {
+  it('по частоте; позиция — по ключу и его вариантам в стране ключа; другие сайты — только с показами в этой стране', () => {
     expect(rows.map((r) => r.key)).toEqual(['futcoins', 'fc coins', 'cheap fut coins']);
     expect(row('futcoins')).toMatchObject({ host: 'futcoins.co.uk', position: 12, impressions: 40, rankPage: '/', ahrefs: 500 });
     expect(row('futcoins').rivals).toEqual([{ host: 'fccoins.co.uk', page: '/', position: 8, impressions: 30, clicks: 0, mapRole: null, above: true }]);
