@@ -12,8 +12,10 @@ import type { Db } from './db';
 import { fetchQueryHostsByCountry, fetchSiteGeos, listAllKnownSites, type QueryOwner } from './google';
 import { keyMapAll, keyMapHeadline } from './key-map';
 import { linksByQuery, type QueryLink } from './group-items';
+import { manualSiteUrl } from './manual-sites';
 import { foldQuery, hostKey } from '$lib/utils/fold-query';
 import { mapGeo, type KeyRole, type MapKey, type MapPage } from '$lib/utils/key-map';
+import { siteHref } from '$lib/utils/site';
 
 /** Страна карты → код страны Search Console. */
 export const GSC_COUNTRY: Record<string, string> = { DE: 'deu', AT: 'aut', CH: 'che', IT: 'ita', ES: 'esp', NL: 'nld', PL: 'pol', FR: 'fra', UK: 'gbr', US: 'usa' };
@@ -39,8 +41,17 @@ export interface MapKeyRow {
   geo: string;
   role: KeyRole;
   host: string;
+  /**
+   * Сайт для закупки (колонка «В группу»): property Search Console, у сайта без
+   * консоли — https://домен/, как на «Ключах сайтов».
+   */
+  siteUrl: string;
   /** Страница по карте (путь). */
   url: string;
+  /** Страница по карте полным адресом — на неё ставятся ссылки. */
+  page: string;
+  /** Ключ и его варианты из группы карты (нормальная форма) — по ним считаются ссылки. */
+  queries: string[];
   volume: number;
   avg: number;
   ahrefs: number | null;
@@ -83,8 +94,10 @@ export function joinMapKeys(input: {
   geos: Map<string, string[]> | null;
   /** Домены, которые есть в Search Console; null — неизвестно. */
   consoleHosts: Set<string> | null;
+  /** Домен → property Search Console (для закупки); нет — сайт без консоли. */
+  siteUrls?: Map<string, string> | null;
 }): MapKeyRow[] {
-  const { headline, pages, owners, links, geos, consoleHosts } = input;
+  const { headline, pages, owners, links, geos, consoleHosts, siteUrls } = input;
   // Роль ключа у каждого сайта по карте (все страницы карты, с вариантами).
   const roleOf = (host: string, k: string): KeyRole | null => {
     let role: KeyRole | null = null;
@@ -144,6 +157,14 @@ export function joinMapKeys(input: {
           } else if (l.fixed && near(l.host)) elsewhere.set(l.host, (elsewhere.get(l.host) ?? 0) + l.qty);
         }
       }
+      const siteUrl = siteUrls?.get(host) ?? manualSiteUrl(host);
+      // Адрес страницы — с тем же началом, что у страниц сайта в Google (www или нет).
+      let page = `https://${host}${mk.url}`;
+      try {
+        page = new URL(mk.url, new URL(me ? me.page : siteHref(siteUrl)).origin + '/').href;
+      } catch {
+        /* битый адрес — остаётся https://домен/путь */
+      }
       const flags: MapKeyFlag[] = [];
       const inConsole = !consoleHosts || consoleHosts.has(host);
       if (!inConsole) flags.push('no-console');
@@ -156,7 +177,10 @@ export function joinMapKeys(input: {
         geo: mapGeo(mk.country),
         role: mk.role,
         host,
+        siteUrl,
         url: mk.url,
+        page,
+        queries,
         volume: typeof mk.volume === 'number' ? mk.volume : 0,
         avg: typeof mk.avg === 'number' ? mk.avg : 0,
         ahrefs: typeof mk.ahrefs === 'number' ? mk.ahrefs : null,
@@ -185,13 +209,20 @@ export async function mapKeyRows(db: Db): Promise<{ rows: MapKeyRow[]; days: num
     fetchSiteGeos(db).catch(() => null),
     listAllKnownSites(db).catch(() => null)
   ]);
+  // Property сайта для закупки: доменная (sc-domain:) охватывает весь сайт — она первой.
+  const siteUrls = new Map<string, string>();
+  for (const s of [...(known?.sites ?? [])].sort((a, b) => Number(b.siteUrl.startsWith('sc-domain:')) - Number(a.siteUrl.startsWith('sc-domain:')))) {
+    const h = hostKey(s.siteUrl);
+    if (!siteUrls.has(h)) siteUrls.set(h, s.siteUrl);
+  }
   const rows = joinMapKeys({
     headline: keyMapHeadline(db),
     pages: keyMapAll(db),
     owners,
     links: linksByQuery(db),
     geos,
-    consoleHosts: known ? new Set(known.sites.map((s) => hostKey(s.siteUrl))) : null
+    consoleHosts: known ? new Set(siteUrls.keys()) : null,
+    siteUrls
   });
   return { rows, days: OWNERS_DAYS, errors };
 }

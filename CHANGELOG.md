@@ -95,6 +95,16 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Map keys: buy links straight from the table.** "Ключи в группу" sits above
+  the table (as on Site keys); every keyword gets "Последняя закупка" (when, in
+  which group and how many links with this keyword went to the map page) and
+  "В группу" (quantity and +). Links target the map page. "Ссылки" updates as
+  soon as a keyword is added. Clicking a row opens the site's naked links — the
+  link text is just the address: to the home page as the full URL and as the
+  domain, to the map page (when it is not the home page) as the full URL; each
+  with its last purchase and "В группу". The "Что не так" column is gone; when
+  Google ranks another page, "стр. /…" shows under the position (hover for the
+  map page's own place). The "problems only" filter stays.
 - **Map keys: when Google ranks another page, the map page's own place shows
   too.** Next to the ranking page and its place — "страница по карте /…" with
   its place and impressions, or that it does not show for the keyword.

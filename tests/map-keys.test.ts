@@ -36,7 +36,8 @@ describe('ключи карты', () => {
       ['futcoins', [l('futcoins.co.uk', 5, true, 100), l('futcoins.co.uk', 3, false), l('fccoins.co.uk', 2, true)]]
     ]),
     geos: new Map([['futcoins.co.uk', ['gbr']], ['fccoins.co.uk', ['gbr']], ['fut-coins.co.uk', ['gbr']], ['futcoin.es', ['esp']]]),
-    consoleHosts: new Set(['futcoins.co.uk', 'fccoins.co.uk', 'fut-coins.co.uk', 'futcoin.es'])
+    consoleHosts: new Set(['futcoins.co.uk', 'fccoins.co.uk', 'fut-coins.co.uk', 'futcoin.es']),
+    siteUrls: new Map([['futcoins.co.uk', 'sc-domain:futcoins.co.uk']])
   });
   const row = (key: string) => rows.find((r) => r.key === key)!;
 
@@ -63,5 +64,25 @@ describe('ключи карты', () => {
 
   it('сайта нет в Search Console — отдельная пометка, не «нет в Google»', () => {
     expect(row('fc coins')).toMatchObject({ position: null, flags: ['no-console'] });
+  });
+
+  it('закупка: property сайта, страница по карте полным адресом, ключ с вариантами', () => {
+    expect(row('futcoins')).toMatchObject({ siteUrl: 'sc-domain:futcoins.co.uk', page: 'https://futcoins.co.uk/', queries: ['futcoins', 'fut coins'] });
+    // Страница по карте, а не та, что ставит Google.
+    expect(row('cheap fut coins').page).toBe('https://futcoins.co.uk/cheap-fut-coins/');
+    // Сайта нет в консоли — адрес как у сайтов «Без консоли».
+    expect(row('fc coins')).toMatchObject({ siteUrl: 'https://fc-coins.net/', page: 'https://fc-coins.net/', queries: ['fc coins'] });
+  });
+
+  it('адрес страницы — с www, если Google показывает сайт с www', () => {
+    const [r] = joinMapKeys({
+      headline: new Map([['futcoin.at', [{ country: 'AT', url: '/fuer-playstation/', key: 'fifa coins ps5', role: 'secondary', volume: 30, avg: 30, ahrefs: null }]]]),
+      pages: new Map(),
+      owners: new Map([['aut\tfifa coins ps5', [o('futcoin.at', 'https://www.futcoin.at/', 8)]]]),
+      links: new Map(),
+      geos: null,
+      consoleHosts: null
+    });
+    expect(r.page).toBe('https://www.futcoin.at/fuer-playstation/');
   });
 });
