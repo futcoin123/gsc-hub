@@ -1657,7 +1657,18 @@ export async function fetchQueryHosts(db: Db, days = 28): Promise<Map<string, Qu
  * Австрии, а не в Британии (раздел «Ключи карты», 18.11.2026). Кэш — час.
  */
 export async function fetchQueryHostsByCountry(db: Db, days = 28): Promise<Map<string, QueryOwner[]>> {
-  return gscCached(`qhosts-cc2:${days}`, async () => {
+  return fetchQueryHostsByCountryRange(db, completedDayRange(days));
+}
+
+/**
+ * То же за свои даты: период из шапки и прошлый такой же отрезок для сравнения
+ * («Ключи карты», 19.11.2026). Окно с сегодняшним днём растёт в течение дня —
+ * его кэш 10 минут, остальные — час.
+ */
+export async function fetchQueryHostsByCountryRange(db: Db, range: { startDate: string; endDate: string }): Promise<Map<string, QueryOwner[]>> {
+  const { startDate, endDate } = range;
+  const ttl = endDate >= localToday() ? 10 * 60 * 1000 : 60 * 60 * 1000;
+  return gscCached(`qhosts-cc3:${startDate}_${endDate}`, async () => {
     const accounts = listAccounts(db).filter(isUsableAccount);
     const perAccount = await Promise.allSettled(accounts.map((a) => listSitesForAccount(db, a)));
     const pairs: { acc: AccountRow; site: SiteRow }[] = [];
@@ -1667,7 +1678,6 @@ export async function fetchQueryHostsByCountry(db: Db, days = 28): Promise<Map<s
           if (site.permissionLevel !== 'siteUnverifiedUser') pairs.push({ acc: accounts[i], site });
         });
     });
-    const { startDate, endDate } = completedDayRange(days);
     const perSite = await mapSettledLimit(pairs, ({ acc, site }) =>
       searchAnalyticsQuery(db, acc, site.siteUrl, { startDate, endDate, dimensions: ['query', 'page', 'country'], rowLimit: 25000 })
     );
@@ -1694,7 +1704,7 @@ export async function fetchQueryHostsByCountry(db: Db, days = 28): Promise<Map<s
     const out = new Map<string, QueryOwner[]>();
     for (const [k, hosts] of byKey) out.set(k, [...hosts.values()].sort((a, b) => a.position - b.position));
     return out;
-  }, 60 * 60 * 1000);
+  }, ttl);
 }
 
 export async function fetchQueryOwners(db: Db, days = 28): Promise<Map<string, QueryOwner[]>> {

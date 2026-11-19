@@ -95,6 +95,17 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Map keys: position for the header period, with a comparison.** The map
+  site's position, impressions and clicks follow the header period instead of
+  a fixed 7 days; a "± позиция" column shows ▲/▼ against the previous window of
+  the same length (Today vs yesterday, Yesterday vs the day before, 7 days vs
+  the previous 7) with "было …" under it, "новый" when it had no impressions
+  then and "выпал" when it has none now. It sorts; the filter row counts rises
+  and drops. Other own sites stay on 7 days; each shows its page and
+  impressions, and the "его главный" badge names the country when the map has
+  the keyword for that site in another country (futcoins.co.uk 5.6 in Spain for
+  "fut coins" is its UK main keyword, with no Spanish row of its own). Clicking
+  a site shows its map keywords.
 - **Map keys: buy links straight from the table.** "Ключи в группу" sits above
   the table (as on Site keys); every keyword gets "Последняя закупка" (when, in
   which group and how many links with this keyword went to the map page) and

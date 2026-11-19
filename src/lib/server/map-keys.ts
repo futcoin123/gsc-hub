@@ -6,10 +6,14 @@
 //
 // Ключи — те же, что в колонке «Карта ключей» на «Ключах сайтов» (главный и до
 // трёх продающих второстепенных у сайта). Позиции — Search Console всех ваших
-// сайтов за последние OWNERS_DAYS дней, в стране ключа: средняя позиция по всем
-// странам путала бы (futcoin.at 11-й по «fifa coins» — это Австрия, не Британия).
+// сайтов в стране ключа: средняя позиция по всем странам путала бы (futcoin.at
+// 11-й по «fifa coins» — это Австрия, не Британия). Позиция сайта по карте — за
+// период из шапки и рядом — за прошлый такой же отрезок («Сегодня» ко вчера,
+// «Вчера» к позавчера, 7 дней к прошлым 7; просьба владелицы 19.11.2026).
+// Ваши другие сайты — всегда за последние OWNERS_DAYS дней, как на «Ключах сайтов».
 import type { Db } from './db';
-import { fetchQueryHostsByCountry, fetchSiteGeos, listAllKnownSites, type QueryOwner } from './google';
+import { fetchQueryHostsByCountryRange, fetchSiteGeos, listAllKnownSites, type QueryOwner } from './google';
+import { addCalendarDays, completedDayRange } from './gsc-calendar';
 import { keyMapAll, keyMapHeadline } from './key-map';
 import { linksByQuery, type QueryLink } from './group-items';
 import { manualSiteUrl } from './manual-sites';
@@ -31,6 +35,12 @@ export interface MapKeyRival {
   clicks: number;
   /** Роль этого ключа у того сайта по карте: главный, второстепенный или нет в карте. */
   mapRole: KeyRole | null;
+  /**
+   * Для какой страны у того сайта этот ключ в карте. Место выше — в стране
+   * строки; у futcoins.co.uk «fut coins» — главный для UK, а в Испании он может
+   * стоять 5-м: своей строки «в Испании» у него нет (там по карте fut-coins.es).
+   */
+  mapCountry: string | null;
   /** Стоит выше сайта, который должен стоять по карте. */
   above: boolean;
 }
@@ -55,10 +65,13 @@ export interface MapKeyRow {
   volume: number;
   avg: number;
   ahrefs: number | null;
-  /** Позиция сайта по ключу (или его варианту) в стране ключа за OWNERS_DAYS дней; null — показов там нет. */
+  /** Позиция сайта по ключу (или его варианту) в стране ключа за период; null — показов там нет. */
   position: number | null;
   impressions: number;
   clicks: number;
+  /** То же за прошлый такой же отрезок (сравнение); null — показов тогда не было. */
+  prevPosition: number | null;
+  prevImpressions: number;
   /** Страница, которую Google показывает по ключу. */
   rankPage: string | null;
   /**
@@ -88,8 +101,12 @@ const pathOf = (u: string) => {
 export function joinMapKeys(input: {
   headline: Map<string, MapKey[]>;
   pages: Map<string, MapPage[]>;
-  /** «страна\tключ» → сайты с показами в этой стране (fetchQueryHostsByCountry). */
+  /** «страна\tключ» → сайты с показами в этой стране за период (fetchQueryHostsByCountryRange). */
   owners: Map<string, QueryOwner[]>;
+  /** То же за прошлый отрезок — для сравнения позиции; нет — сравнения нет. */
+  prevOwners?: Map<string, QueryOwner[]> | null;
+  /** То же за OWNERS_DAYS дней — для «Мои другие сайты»; нет — берётся owners. */
+  rivalOwners?: Map<string, QueryOwner[]> | null;
   links: Map<string, QueryLink[]>;
   geos: Map<string, string[]> | null;
   /** Домены, которые есть в Search Console; null — неизвестно. */
@@ -98,15 +115,25 @@ export function joinMapKeys(input: {
   siteUrls?: Map<string, string> | null;
 }): MapKeyRow[] {
   const { headline, pages, owners, links, geos, consoleHosts, siteUrls } = input;
+  const prevOwners = input.prevOwners ?? null;
+  const rivalOwners = input.rivalOwners ?? owners;
+  /** Лучшая строка каждого сайта по ключу и вариантам в стране (больше показов). */
+  const bestByHost = (src: Map<string, QueryOwner[]>, cc: string, queries: string[]) => {
+    const by = new Map<string, QueryOwner>();
+    for (const q of queries)
+      for (const o of src.get(`${cc}\t${q}`) ?? []) {
+        const cur = by.get(o.host);
+        if (!cur || o.impressions > cur.impressions) by.set(o.host, o);
+      }
+    return by;
+  };
   // Роль ключа у каждого сайта по карте (все страницы карты, с вариантами).
-  const roleOf = (host: string, k: string): KeyRole | null => {
-    let role: KeyRole | null = null;
-    for (const p of pages.get(host) ?? []) {
-      if (![p.key, ...p.alts].some((x) => foldQuery(x) === k)) continue;
-      if (p.role === 'main') return 'main';
-      role = 'secondary';
-    }
-    return role;
+  // Страна строки — первой: у сайта с языковыми папками ключ бывает в нескольких странах.
+  const roleOf = (host: string, k: string, country: string): { role: KeyRole; country: string } | null => {
+    const hits = (pages.get(host) ?? []).filter((p) => [p.key, ...p.alts].some((x) => foldQuery(x) === k));
+    const rank = (p: MapPage) => (p.country === country ? 0 : 2) + (p.role === 'main' ? 0 : 1);
+    const best = hits.sort((a, b) => rank(a) - rank(b))[0];
+    return best ? { role: best.role, country: best.country } : null;
   };
   const rows: MapKeyRow[] = [];
   for (const [host, keys] of headline) {
@@ -117,14 +144,15 @@ export function joinMapKeys(input: {
       const queries = [...new Set([k, ...alts.map(foldQuery)])];
       // Лучшая строка каждого сайта по ключу и его вариантам (больше показов) — в стране ключа.
       const cc = GSC_COUNTRY[mk.country] ?? mk.country.toLowerCase();
-      const byHost = new Map<string, QueryOwner>();
+      // Другие сайты — за OWNERS_DAYS дней; сам сайт по карте — за период из шапки.
+      const byHost = bestByHost(rivalOwners, cc, queries);
+      const me = bestByHost(owners, cc, queries).get(host) ?? null;
+      const prev = prevOwners ? (bestByHost(prevOwners, cc, queries).get(host) ?? null) : null;
       // Страницы сайта по карте по ключу и вариантам: показы и клики — сумма,
       // место — среднее, взвешенное по показам.
       const myPages = new Map<string, { position: number; impressions: number; clicks: number }>();
       for (const q of queries) {
         for (const o of owners.get(`${cc}\t${q}`) ?? []) {
-          const cur = byHost.get(o.host);
-          if (!cur || o.impressions > cur.impressions) byHost.set(o.host, o);
           if (o.host !== host) continue;
           for (const pg of o.pages ?? [{ page: o.page, position: o.position, impressions: o.impressions, clicks: o.clicks }]) {
             const path = pathOf(pg.page);
@@ -137,14 +165,16 @@ export function joinMapKeys(input: {
           }
         }
       }
-      const me = byHost.get(host) ?? null;
       // Ссылки на тот же ключ другим сайтам — только сайтам этой страны: виден в
       // ней по ключу или это его основная страна в Search Console.
       const near = (h: string) => byHost.has(h) || (geos?.get(h) ?? []).includes(cc);
       const rivals: MapKeyRival[] = [...byHost.values()]
         .filter((o) => o.host !== host)
         .sort((a, b) => a.position - b.position)
-        .map((o) => ({ host: o.host, page: pathOf(o.page), position: o.position, impressions: o.impressions, clicks: o.clicks, mapRole: roleOf(o.host, k), above: !me || o.position < me.position }));
+        .map((o) => {
+          const m = roleOf(o.host, k, mk.country);
+          return { host: o.host, page: pathOf(o.page), position: o.position, impressions: o.impressions, clicks: o.clicks, mapRole: m?.role ?? null, mapCountry: m?.country ?? null, above: !me || o.position < me.position };
+        });
       let bought = 0, planned = 0, lastBuy: number | null = null;
       const elsewhere = new Map<string, number>();
       for (const q of queries) {
@@ -187,6 +217,8 @@ export function joinMapKeys(input: {
         position: me ? me.position : null,
         impressions: me?.impressions ?? 0,
         clicks: me?.clicks ?? 0,
+        prevPosition: prev ? prev.position : null,
+        prevImpressions: prev?.impressions ?? 0,
         rankPage: me ? pathOf(me.page) : null,
         mapPage: me && pathOf(me.page) !== mk.url ? (myPages.get(mk.url) ?? null) : null,
         rivals,
@@ -201,11 +233,40 @@ export function joinMapKeys(input: {
   return rows.sort((a, b) => b.volume - a.volume || a.key.localeCompare(b.key));
 }
 
-/** Строки раздела: карта + позиции Google за OWNERS_DAYS дней + закупки. */
-export async function mapKeyRows(db: Db): Promise<{ rows: MapKeyRow[]; days: number; errors: string[] }> {
+type Range = { startDate: string; endDate: string };
+
+/** Прошлый отрезок той же длины прямо перед периодом: «Сегодня» → вчера, «Вчера» → позавчера, 7 дней → прошлые 7. */
+export function previousRange(p: Range & { days: number }): Range {
+  return { startDate: addCalendarDays(p.startDate, -p.days), endDate: addCalendarDays(p.startDate, -1) };
+}
+
+export interface MapKeyRowsResult {
+  rows: MapKeyRow[];
+  period: Range;
+  prev: Range;
+  /** За сколько дней «Мои другие сайты». */
+  rivalDays: number;
+  errors: string[];
+}
+
+/** Строки раздела: карта + позиции Google за период и прошлый отрезок + закупки. */
+export async function mapKeyRows(db: Db, period: Range & { days: number }): Promise<MapKeyRowsResult> {
   const errors: string[] = [];
-  const [owners, geos, known] = await Promise.all([
-    fetchQueryHostsByCountry(db, OWNERS_DAYS).catch((e) => (errors.push(`позиции Google: ${(e as Error).message}`), new Map<string, QueryOwner[]>())),
+  const range: Range = { startDate: period.startDate, endDate: period.endDate };
+  const prevRange = previousRange(period);
+  const rivalRange = completedDayRange(OWNERS_DAYS);
+  // Один и тот же отрезок (период «7 дней» = окно других сайтов) спрашиваем один раз.
+  const asked = new Map<string, Promise<Map<string, QueryOwner[]> | null>>();
+  const owners = (r: Range, what: string) => {
+    const k = `${r.startDate}_${r.endDate}`;
+    if (!asked.has(k))
+      asked.set(k, fetchQueryHostsByCountryRange(db, r).catch((e) => (errors.push(`позиции Google ${what}: ${(e as Error).message}`), null)));
+    return asked.get(k)!;
+  };
+  const [cur, prev, rival, geos, known] = await Promise.all([
+    owners(range, 'за период'),
+    owners(prevRange, 'для сравнения'),
+    owners(rivalRange, 'других сайтов'),
     fetchSiteGeos(db).catch(() => null),
     listAllKnownSites(db).catch(() => null)
   ]);
@@ -218,11 +279,13 @@ export async function mapKeyRows(db: Db): Promise<{ rows: MapKeyRow[]; days: num
   const rows = joinMapKeys({
     headline: keyMapHeadline(db),
     pages: keyMapAll(db),
-    owners,
+    owners: cur ?? new Map(),
+    prevOwners: prev,
+    rivalOwners: rival ?? cur ?? new Map(),
     links: linksByQuery(db),
     geos,
     consoleHosts: known ? new Set(siteUrls.keys()) : null,
     siteUrls
   });
-  return { rows, days: OWNERS_DAYS, errors };
+  return { rows, period: range, prev: prevRange, rivalDays: OWNERS_DAYS, errors: [...new Set(errors)] };
 }

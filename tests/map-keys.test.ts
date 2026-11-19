@@ -1,6 +1,6 @@
 // «Ключи карты»: ключ карты → сайт по карте, позиция, мои другие сайты, закупки.
 import { describe, it, expect } from 'vitest';
-import { joinMapKeys } from '../src/lib/server/map-keys';
+import { joinMapKeys, previousRange } from '../src/lib/server/map-keys';
 import type { QueryOwner } from '../src/lib/server/google';
 import type { QueryLink } from '../src/lib/server/group-items';
 import type { MapKey, MapPage } from '../src/lib/utils/key-map';
@@ -44,7 +44,7 @@ describe('ключи карты', () => {
   it('по частоте; позиция — по ключу и его вариантам в стране ключа; другие сайты — только с показами в этой стране', () => {
     expect(rows.map((r) => r.key)).toEqual(['futcoins', 'fc coins', 'cheap fut coins']);
     expect(row('futcoins')).toMatchObject({ host: 'futcoins.co.uk', position: 12, impressions: 40, rankPage: '/', ahrefs: 500 });
-    expect(row('futcoins').rivals).toEqual([{ host: 'fccoins.co.uk', page: '/', position: 8, impressions: 30, clicks: 0, mapRole: null, above: true }]);
+    expect(row('futcoins').rivals).toEqual([{ host: 'fccoins.co.uk', page: '/', position: 8, impressions: 30, clicks: 0, mapRole: null, mapCountry: null, above: true }]);
     expect(row('futcoins').flags).toEqual(['rival-above']);
   });
 
@@ -59,7 +59,7 @@ describe('ключи карты', () => {
     // Страница по карте тоже видна по ключу — её собственное место.
     expect(r.mapPage).toEqual({ position: 25, impressions: 4, clicks: 1 });
     expect(row('futcoins').mapPage).toBeNull();
-    expect(r.rivals[0]).toMatchObject({ host: 'fut-coins.co.uk', mapRole: 'main', above: true });
+    expect(r.rivals[0]).toMatchObject({ host: 'fut-coins.co.uk', mapRole: 'main', mapCountry: 'UK', above: true });
   });
 
   it('сайта нет в Search Console — отдельная пометка, не «нет в Google»', () => {
@@ -84,5 +84,68 @@ describe('ключи карты', () => {
       consoleHosts: null
     });
     expect(r.page).toBe('https://www.futcoin.at/fuer-playstation/');
+  });
+
+  it('без прошлого отрезка сравнения нет', () => {
+    expect(row('futcoins')).toMatchObject({ prevPosition: null, prevImpressions: 0 });
+  });
+});
+
+describe('ключи карты: сравнение с прошлым отрезком', () => {
+  it('«Сегодня» — со вчера, «Вчера» — с позавчера, 7 дней — с прошлыми 7', () => {
+    expect(previousRange({ startDate: '2026-11-19', endDate: '2026-11-19', days: 1 })).toEqual({ startDate: '2026-11-18', endDate: '2026-11-18' });
+    expect(previousRange({ startDate: '2026-11-18', endDate: '2026-11-18', days: 1 })).toEqual({ startDate: '2026-11-17', endDate: '2026-11-17' });
+    expect(previousRange({ startDate: '2026-11-12', endDate: '2026-11-18', days: 7 })).toEqual({ startDate: '2026-11-05', endDate: '2026-11-11' });
+  });
+
+  const one = (input: Partial<Parameters<typeof joinMapKeys>[0]>) =>
+    joinMapKeys({
+      headline: new Map([['futcoins.co.uk', [{ country: 'UK', url: '/', key: 'futcoins', role: 'main', volume: 1650, avg: 1660, ahrefs: 500 }]]]),
+      pages: new Map([['futcoins.co.uk', [{ country: 'UK', url: '/', key: 'futcoins', role: 'main', alts: ['fut coins'] }]]]),
+      owners: new Map(),
+      links: new Map(),
+      geos: null,
+      consoleHosts: null,
+      ...input
+    })[0];
+
+  it('позиция за период и тогда — по ключу и вариантам, строка с большими показами', () => {
+    const r = one({
+      owners: new Map([['gbr\tfutcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 12, 40)]]]),
+      prevOwners: new Map([
+        ['gbr\tfutcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 18, 5)]],
+        ['gbr\tfut coins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 15, 30), o('fccoins.co.uk', 'https://fccoins.co.uk/', 3, 9)]]
+      ])
+    });
+    expect(r).toMatchObject({ position: 12, impressions: 40, prevPosition: 15, prevImpressions: 30 });
+    // Другие сайты прошлого отрезка в «Мои другие сайты» не попадают.
+    expect(r.rivals).toEqual([]);
+  });
+
+  it('выпал: тогда был, за период показов нет', () => {
+    const r = one({ prevOwners: new Map([['gbr\tfutcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 9, 7)]]]) });
+    expect(r).toMatchObject({ position: null, prevPosition: 9, flags: ['not-ranking'] });
+  });
+
+  it('другие сайты — из своего окна (7 дней), «выше» — к позиции за период', () => {
+    const r = one({
+      owners: new Map([['gbr\tfutcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 10, 40)]]]),
+      rivalOwners: new Map([['gbr\tfutcoins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 20, 90), o('fccoins.co.uk', 'https://fccoins.co.uk/', 14, 30), o('futcoins.eu', 'https://futcoins.eu/', 6, 5)]]])
+    });
+    expect(r.position).toBe(10);
+    expect(r.rivals.map((x) => [x.host, x.above])).toEqual([['futcoins.eu', true], ['fccoins.co.uk', false]]);
+    expect(r.flags).toEqual(['rival-above']);
+  });
+
+  it('другой сайт выше в стране ключа, а по карте этот ключ у него — для другой страны', () => {
+    const r = joinMapKeys({
+      headline: new Map([['fut-coins.es', [{ country: 'ES', url: '/', key: 'fut coins', role: 'main', volume: 150, avg: 150, ahrefs: 150 }]]]),
+      pages: new Map([['futcoins.co.uk', [{ country: 'UK', url: '/', key: 'futcoins', role: 'main', alts: ['fut coins'] }]]]),
+      owners: new Map([['esp\tfut coins', [o('futcoins.co.uk', 'https://futcoins.co.uk/', 5.6), o('fut-coins.es', 'https://fut-coins.es/', 29.3)]]]),
+      links: new Map(),
+      geos: null,
+      consoleHosts: null
+    })[0];
+    expect(r.rivals[0]).toMatchObject({ host: 'futcoins.co.uk', position: 5.6, mapRole: 'main', mapCountry: 'UK', above: true });
   });
 });

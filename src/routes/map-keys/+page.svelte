@@ -6,8 +6,9 @@
   // Закупка прямо отсюда (просьба владелицы 19.11.2026): «Последняя закупка» и
   // «В группу» у каждого ключа, как на «Ключах сайтов»; в раскрытой строке —
   // безанкорные ссылки (текст — адрес) на главную сайта и на страницу по карте.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import SortTh from '$lib/components/SortTh.svelte';
+  import PeriodNote from '$lib/components/PeriodNote.svelte';
   import SiteLabel from '$lib/components/SiteLabel.svelte';
   import GroupBar from '$lib/components/GroupBar.svelte';
   import GroupCell from '$lib/components/GroupCell.svelte';
@@ -24,28 +25,55 @@
   let { data } = $props();
   $effect.pre(() => useLabels(data.labels));
 
+  type Range = { startDate: string; endDate: string };
   let rows = $state<MapKeyRow[]>([]);
-  let days = $state(7);
+  // Позиция — за период из шапки, сравнение — с прошлым таким же отрезком;
+  // «Мои другие сайты» — за rivalDays дней.
+  let period = $state<Range | null>(null);
+  let prev = $state<Range | null>(null);
+  let rivalDays = $state(7);
   let errors = $state<string[]>([]);
   let loading = $state(true);
   let err = $state<string | null>(null);
   // Группы и их ссылки: колонки «В группу», «Последняя закупка» и живые «Ссылки».
   let giReady = $state(false);
-  onMount(async () => {
+  onMount(() => {
     loadGroupItems().then(() => (giReady = !gi.error));
+  });
+  let asked = 0;
+  async function loadRows() {
+    const n = ++asked;
+    loading = true;
+    err = null;
     try {
       const r = await fetch('/map-keys/rows', { headers: { accept: 'application/json' } });
       if (!r.ok) throw new Error((await r.text()).slice(0, 200) || `HTTP ${r.status}`);
       const j = await r.json();
+      if (n !== asked) return;
       rows = j.rows ?? [];
-      days = j.days ?? 7;
+      period = j.period ?? null;
+      prev = j.prev ?? null;
+      rivalDays = j.rivalDays ?? 7;
       errors = j.errors ?? [];
     } catch (e) {
-      err = (e as Error).message;
+      if (n === asked) err = (e as Error).message;
     } finally {
-      loading = false;
+      if (n === asked) loading = false;
     }
+  }
+  // Сменили период в шапке — строки заново (страница при этом не перезагружается).
+  let loadedFor = '';
+  $effect(() => {
+    const k = `${data.period.startDate}_${data.period.endDate}`;
+    if (k === loadedFor) return;
+    loadedFor = k;
+    untrack(loadRows);
   });
+  const fdm = (iso: string) => iso.split('-').reverse().join('.');
+  const rangeLabel = (r: Range | null) => (!r ? '' : r.startDate === r.endDate ? fdm(r.startDate) : `${fdm(r.startDate)} – ${fdm(r.endDate)}`);
+  const prevLabel = $derived(rangeLabel(prev));
+  /** На сколько мест поднялся (+) или опустился (−) к прошлому отрезку. */
+  const posMove = (r: MapKeyRow) => (r.position !== null && r.prevPosition !== null ? Math.round((r.prevPosition - r.position) * 10) / 10 : null);
 
   // ── Фильтры ──
   let search = $state('');
@@ -127,13 +155,19 @@
   }
   const nakedInGroup = (r: MapKeyRow) => nakedOf(r).filter((n) => inActive(n.page, nakedQuery(n.variant))).length;
 
-  type K = 'key' | 'volume' | 'ahrefs' | 'host' | 'position' | 'rivals' | 'bought' | 'last' | 'group';
-  const sort = new TableSort<K>('volume', -1, ['volume', 'ahrefs', 'rivals', 'bought', 'last', 'group']);
+  type K = 'key' | 'volume' | 'ahrefs' | 'host' | 'position' | 'dpos' | 'rivals' | 'bought' | 'last' | 'group';
+  const sort = new TableSort<K>('volume', -1, ['volume', 'ahrefs', 'dpos', 'rivals', 'bought', 'last', 'group']);
   const shown = $derived(
     sort.apply(filtered, (r, k) => {
       if (k === 'last') {
         const l = keyGroups(r.page, r.key);
         return l.length ? l[l.length - 1].at : null;
+      }
+      if (k === 'dpos') {
+        // Появился — как сильный рост, выпал — как сильное падение.
+        if (r.position !== null && r.prevPosition === null) return 1000;
+        if (r.position === null && r.prevPosition !== null) return -1000;
+        return posMove(r);
       }
       if (k === 'group') {
         const g = activeGroup();
@@ -173,7 +207,8 @@
   <section class="pane">
     <div class="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2">
       <h1 class="text-base font-semibold">Ключи карты</h1>
-      <span class="text-xs text-ink-3">Главные и второстепенные ключи из «Карты ключей FUT»: какой сайт должен стоять, где он стоит в Google в стране ключа за последние {days} дн., кто из ваших сайтов виден в этой стране по тому же ключу и сколько ссылок куплено. Купить — «В группу» у ключа; безанкорные ссылки на главную — в раскрытой строке (нажмите на строку).</span>
+      <PeriodNote start={period?.startDate ?? data.period.startDate} end={period?.endDate ?? data.period.endDate} note={prevLabel ? `сравнение — с ${prevLabel}` : ''} />
+      <span class="text-xs text-ink-3">Главные и второстепенные ключи из «Карты ключей FUT»: какой сайт должен стоять, где он стоит в Google в стране ключа за период из шапки и как изменилось к прошлому такому же отрезку, кто из ваших сайтов виден в этой стране по тому же ключу (за {rivalDays} дн.) и сколько ссылок куплено. Купить — «В группу» у ключа; безанкорные ссылки на главную — в раскрытой строке (нажмите на строку).</span>
     </div>
     <div class="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2 text-xs">
       <input class="input h-7 w-56 text-xs" placeholder="Ключ или сайт содержит…" bind:value={search} aria-label="Поиск ключа или сайта" />
@@ -187,7 +222,7 @@
         {/each}
       </div>
       <label class="flex items-center gap-1 text-ink-2" title="Не в Google, ваш другой сайт выше, Google ставит другую страницу или место ниже 10-го"><input type="checkbox" bind:checked={problems} /> только проблемные</label>
-      {#if !loading && !err}<span class="text-ink-3">{fmt(filtered.length)} ключей · в топ-10 {fmt(filtered.filter((r) => r.position !== null && r.position <= 10).length)} · выше мой другой сайт {fmt(filtered.filter((r) => r.flags.includes('rival-above')).length)}</span>{/if}
+      {#if !loading && !err}<span class="text-ink-3">{fmt(filtered.length)} ключей · в топ-10 {fmt(filtered.filter((r) => r.position !== null && r.position <= 10).length)} · выше мой другой сайт {fmt(filtered.filter((r) => r.flags.includes('rival-above')).length)}{#if prevLabel} · <span class="text-up">выросли {fmt(filtered.filter((r) => (posMove(r) ?? 0) > 0).length)}</span> · <span class="text-dn">упали {fmt(filtered.filter((r) => (posMove(r) ?? 0) < 0).length)}</span>{/if}</span>{/if}
     </div>
     <div class="border-b border-line px-3 py-2"><GroupBar /></div>
     {#each errors as e (e)}<p class="px-3 py-1.5 text-xs text-bad">{e}</p>{/each}
@@ -207,8 +242,9 @@
               <SortTh {sort} k="volume" label="Сент." num title="Запросов в Google за сентябрь 2026 по карте (первая цифра вида «План»); при наведении — среднее за год" />
               <SortTh {sort} k="ahrefs" label="Ahrefs" num title="Частотность Ahrefs по карте ключей" />
               <SortTh {sort} k="host" label="Сайт по карте" title="Какой сайт и страница должны стоять по этому ключу" />
-              <SortTh {sort} k="position" label="Позиция" num title="Место сайта в Google по ключу и его вариантам в стране ключа (UK — Британия, DE — Германия…) за последние дни; ниже — показы и клики там" />
-              <SortTh {sort} k="rivals" label="Мои другие сайты" title="Ваши другие сайты с показами по этому ключу в той же стране и их место там. Красным — стоят выше сайта по карте. Сортировка — по числу тех, кто выше" />
+              <SortTh {sort} k="position" label="Позиция" num title="Место сайта в Google по ключу и его вариантам в стране ключа (UK — Британия, DE — Германия…) за период из шапки; ниже — показы и клики там" />
+              <SortTh {sort} k="dpos" label="± позиция" num title="▲ — поднялся (место стало выше), ▼ — опустился; к {prevLabel || 'прошлому отрезку'}: «Сегодня» — ко вчера, «Вчера» — к позавчера, 7 дней — к прошлым 7. Ниже — место тогда" />
+              <SortTh {sort} k="rivals" label="Мои другие сайты" title="Ваши другие сайты с показами по этому ключу в той же стране и их место там — за последние {rivalDays} дн. (не за период в шапке), как на «Ключах сайтов». Красным — стоят выше сайта по карте. Сортировка — по числу тех, кто выше" />
               <SortTh {sort} k="bought" label="Ссылки" num title="Ссылок с этим анкором (ключом или его вариантом) на сайт по карте во всех группах: куплено (зафиксированные группы) и в плане (незафиксированные). Меняется сразу после «В группу»" />
               <SortTh {sort} k="last" label="Последняя закупка" title="Когда в последний раз брали ссылки с этим ключом на страницу по карте и сколько (кроме выбранной сейчас группы). Клик — вся история" />
               <SortTh {sort} k="group" label="В группу" num title="Ссылки с этим ключом на страницу по карте — в группу, выбранную над таблицей: впишите количество и нажмите +. Безанкорные ссылки на главную — в раскрытой строке (нажмите на строку)" />
@@ -246,14 +282,31 @@
                     {#if r.rankPage !== null && r.rankPage !== r.url}<div class="pii whitespace-nowrap text-[11px] text-warn" title="Google показывает по ключу не ту страницу, что в карте. Страница по карте {r.url}: {r.mapPage ? `место ${pos(r.mapPage.position)}, ${fmt(r.mapPage.impressions)} показов` : 'по ключу не показывается'}">стр. {r.rankPage}</div>{/if}
                   {/if}
                 </td>
+                <td class="num app-num whitespace-nowrap">
+                  {#if r.position !== null && r.prevPosition !== null}
+                    {@const d = posMove(r) ?? 0}
+                    {#if d === 0}<span class="text-ink-3">0</span>
+                    {:else}<span class={d > 0 ? 'text-up' : 'text-dn'} title={d > 0 ? `Поднялся на ${pos(d)}` : `Опустился на ${pos(-d)}`}>{d > 0 ? '▲' : '▼'}{pos(Math.abs(d))}</span>{/if}
+                    <div class="text-[11px] text-ink-3" title="Место за {prevLabel}: {pos(r.prevPosition)} · {fmt(r.prevImpressions)} показов">было {pos(r.prevPosition)}</div>
+                  {:else if r.position !== null}
+                    <span class="text-up" title="За {prevLabel} показов по ключу в стране ключа не было">новый</span>
+                  {:else if r.prevPosition !== null}
+                    <span class="text-dn" title="За {prevLabel} место было {pos(r.prevPosition)} ({fmt(r.prevImpressions)} показов), за период показов нет">выпал</span>
+                    <div class="text-[11px] text-ink-3">было {pos(r.prevPosition)}</div>
+                  {:else}
+                    <span class="text-ink-4">—</span>
+                  {/if}
+                </td>
                 <td class="text-xs">
                   {#if !r.rivals.length}
                     <span class="text-ink-4">—</span>
                   {:else}
                     {#each r.rivals.slice(0, open.has(k) ? 50 : 3) as v (v.host)}
-                      <div class="whitespace-nowrap {v.above ? 'text-dn' : 'text-ink-2'}" title="{v.host}{v.page} · место {pos(v.position)} · {fmt(v.impressions)} показов · {fmt(v.clicks)} кликов{v.mapRole ? ` · у этого сайта ключ по карте ${v.mapRole === 'main' ? 'главный' : 'второстепенный'}` : ' · у этого сайта ключа в карте нет'}">
-                        <span class="pii font-semibold">{v.host}</span> <span class="app-num">{pos(v.position)}</span>
-                        {#if v.mapRole}<span class="badge {v.mapRole === 'main' ? 'badge-ok' : 'badge-muted'} text-[10px]">{v.mapRole === 'main' ? 'его главный' : 'его второстеп.'}</span>{/if}
+                      {@const away = !!v.mapCountry && v.mapCountry !== r.country}
+                      <div class="whitespace-nowrap {v.above ? 'text-dn' : 'text-ink-2'}" title="{v.host}{v.page} · место {pos(v.position)} в стране этого ключа ({r.country}) за {rivalDays} дн. · {fmt(v.impressions)} показов · {fmt(v.clicks)} кликов{v.mapRole ? ` · у этого сайта ключ по карте ${v.mapRole === 'main' ? 'главный' : 'второстепенный'} для ${v.mapCountry}` : ' · у этого сайта ключа в карте нет'}{away ? ` — его строка в таблице про ${v.mapCountry}, а не про ${r.country}, и место там своё` : ''}. Нажмите на сайт — его ключи карты">
+                        <button type="button" class="pii font-semibold hover:underline" onclick={(e) => { e.stopPropagation(); search = v.host; }}>{v.host}</button> <span class="app-num">{pos(v.position)}</span>
+                        <span class="pii text-[11px] text-ink-3">{v.page} · {fmt(v.impressions)} пок.</span>
+                        {#if v.mapRole}<span class="badge {v.mapRole === 'main' ? 'badge-ok' : 'badge-muted'} text-[10px]">{v.mapRole === 'main' ? 'его главный' : 'его второстеп.'}{away ? ` · ${v.mapCountry}` : ''}</span>{/if}
                       </div>
                     {/each}
                     {#if !open.has(k) && r.rivals.length > 3}<div class="text-ink-4">ещё {r.rivals.length - 3}</div>{/if}
@@ -273,7 +326,7 @@
               </tr>
               {#if open.has(k)}
                 <tr class="bg-sunk hover:bg-sunk">
-                  <td colspan="9" class="py-2">
+                  <td colspan="10" class="py-2">
                     <div class="mb-1 text-xs font-semibold text-ink-2">
                       Безанкорные ссылки на <span class="pii">{r.host}</span>
                       <span class="font-normal text-ink-3">— текст ссылки просто адрес, без ключа: на главную полным адресом и доменом{r.page !== nakedOf(r)[0].page ? ', на страницу по карте — полным адресом' : ''}. Количество и + — в группу, выбранную над таблицей.</span>
