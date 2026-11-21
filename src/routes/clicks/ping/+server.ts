@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { requireAdmin } from '$lib/server/guard';
 import { normHost } from '$lib/server/button-clicks';
-import { counterKit, cleanEventsPath } from '$lib/counter-kit.js';
+import { counterKit, cleanEventsPath, KIT_VERSION } from '$lib/counter-kit.js';
 
 export type PingStep = 'ok' | 'unreachable' | 'no-kit' | 'no-key' | 'bad-key' | 'no-arrival';
 
@@ -38,14 +38,14 @@ export const POST: RequestHandler = async ({ request, url, locals }) => {
   } catch (e) {
     return json({ step: 'unreachable' satisfies PingStep, target, detail: (e as Error).message });
   }
-  // Счётчик v2 сам говорит, что ответила панель.
-  if (pong === 'ok' || pong === 'bad-key' || pong === 'no-key') return json({ step: pong satisfies PingStep, target, kit });
-  if (pong && pong !== 'wait') return json({ step: 'no-arrival' satisfies PingStep, target, kit, detail: pong });
+  // Счётчик v2 сам говорит, что ответила панель. latest — свежая версия: старую на сайте видно сразу.
+  if (pong === 'ok' || pong === 'bad-key' || pong === 'no-key') return json({ step: pong satisfies PingStep, target, kit, latest: KIT_VERSION });
+  if (pong && pong !== 'wait') return json({ step: 'no-arrival' satisfies PingStep, target, kit, latest: KIT_VERSION, detail: pong });
   const find = db().prepare("SELECT outcome FROM counter_log WHERE host = ? AND kind = 'test' AND last_at >= ? ORDER BY last_at DESC LIMIT 1");
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 500));
     const row = find.get(host, t0) as { outcome: string } | undefined;
-    if (row) return json({ step: (row.outcome === 'ok' ? 'ok' : 'bad-key') satisfies PingStep, target, kit });
+    if (row) return json({ step: (row.outcome === 'ok' ? 'ok' : 'bad-key') satisfies PingStep, target, kit, latest: KIT_VERSION });
   }
-  return json({ step: 'no-arrival' satisfies PingStep, target, kit });
+  return json({ step: 'no-arrival' satisfies PingStep, target, kit, latest: KIT_VERSION });
 };

@@ -4,7 +4,7 @@
 export interface CounterLogRow {
   /** view — просмотр с источником, view-nosrc — без, time, submit, click. */
   kind: string;
-  /** ok или причина отказа: bad-key, unknown-site, bot, limit, bad-event. */
+  /** ok или причина отказа: bad-key, unknown-site, bot, limit, bad-event; team и robot — свои и роботы (не ошибка). */
   outcome: string;
   n: number;
   lastAt: number;
@@ -51,6 +51,17 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
   // по одному-двум просмотрам его может ещё не быть — это не поломка.
   if (views >= MIN_VIEWS_FOR_TIME && !ok('time')) out.push({ level: 'warn', text: `Время на странице не приходит (${views} просмотров, ни одного времени) — «Среднее время» пустое.` });
 
+  // Свои визиты и роботы сайт (счётчик v3) не считает сам — это не ошибка.
+  const skipped = (o: string, k: string) => sum(rows, (r) => r.outcome === o && r.kind === k);
+  const skippedText = (['team', 'robot'] as const)
+    .filter((o) => rejected(o))
+    .map((o) => `${o === 'team' ? 'свои визиты (метка ?team=1)' : 'роботы (navigator.webdriver: Playwright, headless)'} — ${skipped(o, 'view')} просмотров${skipped(o, 'submit') ? `, ${skipped(o, 'submit')} переходов к оплате` : ''}`)
+    .join('; ');
+  rows = rows.filter((r) => r.outcome !== 'team' && r.outcome !== 'robot');
+
+  if (!rows.length && skippedText) {
+    return [{ level: 'ok', text: `Связь с панелью есть. Посетителей, кроме своих и роботов, не было: не засчитаны ${skippedText}.` }];
+  }
   if (!rows.length && ping) {
     return [{ level: 'ok', text: `Связь с панелью есть: проверка прошла ${fmtTime(ping.lastAt)}. Посетителей с тех пор не было.` }];
   }
@@ -58,7 +69,7 @@ export function counterVerdict(rows: CounterLogRow[], fmtTime: (ts: number) => s
     return [{ level: 'bad', text: `Проверка связи дошла, но отброшена: ключ сайта не подходит (${fmtTime(last(tests, () => true))}). Обновите секрет COUNTER_KEY в Cloudflare.` }];
   }
   if (!out.length) {
-    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.${rejected('no-visit') ? ` Не засчитано ${rejected('no-visit')} переходов к оплате без просмотра сайта (проверки сайта, роботы).` : ''}${rejected('repeat') ? ` Не засчитано ${rejected('repeat')} повторных переходов к оплате одного посетителя за 30 минут.` : ''}` });
+    out.push({ level: 'ok', text: `Принято ${accepted} событий${since ? ` после проверки связи ${fmtTime(since)}` : ''} (последнее ${fmtTime(last(rows, (r) => r.outcome === 'ok'))}): просмотры с источником${ok('time') ? ', время' : ''}${ok('submit') ? ', переходы к оплате' : ''}${ok('click') ? ', нажатия' : ''}.${rejected('no-visit') ? ` Не засчитано ${rejected('no-visit')} переходов к оплате без просмотра сайта (проверки сайта, роботы).` : ''}${rejected('repeat') ? ` Не засчитано ${rejected('repeat')} повторных переходов к оплате одного посетителя за 30 минут.` : ''}${skippedText ? ` Не засчитаны ${skippedText}.` : ''}` });
   }
   return out;
 }

@@ -95,6 +95,19 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Unified counter, version 3: own visits and robots are not counted.** So
+  bounces, time on site and checkouts are real. Robots are browsers with
+  `navigator.webdriver` (Playwright, Puppeteer, Selenium, headless): the page
+  code flags their events and the site does not forward them; their checkout
+  does not count (no accepted view). Own visits are staff: open any page of a
+  site with `?team=1` and the site remembers the browser for a year (the
+  site's server sets an HttpOnly cookie; the page code still writes nothing in
+  the browser), `?team=0` clears it; their views, time and checkouts are not
+  counted. The counter check shows how many own visits and robots were
+  skipped. The Buttons page lists `?team=1` links for every site, and "Check
+  site" says when a site runs an older version. Names in each site's code stay
+  the same; one field is added. Takes effect on sites whose two counter files
+  are updated to version 3.
 - **Map keys: position for the header period, with a comparison.** The map
   site's position, impressions and clicks follow the header period instead of
   a fixed 7 days; a "± позиция" column shows ▲/▼ against the previous window of

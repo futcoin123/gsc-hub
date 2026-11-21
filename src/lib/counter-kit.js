@@ -14,17 +14,31 @@
 //      функции не уходит. Проверка связи ({"gsc_ping":1} на адрес событий)
 //      доходит до панели, ответ панели — в заголовке x-counter-ping (ok,
 //      bad-key…); в статистику не попадает.
+// Версия 3 (21.11.2026): свои визиты и роботы не считаются, чтобы отказы, время
+// и переходы к оплате были настоящими.
+//   • Робот — браузер с navigator.webdriver === true (Playwright, Puppeteer,
+//     Selenium, headless): код страницы помечает его события полем-флагом и шлёт
+//     как обычно (проверки сайтов в Playwright по-прежнему видят просмотр),
+//     модуль такие события в статистику не пересылает. Переход к оплате робота
+//     не засчитывается и так: без принятого просмотра того же посетителя панель
+//     его отбрасывает (checkoutVerdict).
+//   • Свои — сотрудники: один раз открыть любую страницу сайта с ?team=1 —
+//     модуль ставит cookie на год (HttpOnly, только сервером: код страницы
+//     по-прежнему ничего не пишет и не читает в браузере), ?team=0 — снимает.
+//     С этим cookie не пересылаются ни события страницы, ни переход к оплате.
+//   • И то и другое панель видит как «отброшено: свои / робот» в журнале
+//     приёма (только просмотры и переходы к оплате) — видно, что фильтр работает.
 // Обычный JS без зависимостей: его берут и панель («Кнопки» → «Единый
 // счётчик»), и команда scripts/counter-kit.mjs для сессий сайтов.
 import { createHash } from 'node:crypto';
 
-export const KIT_VERSION = '2';
+export const KIT_VERSION = '3';
 // Имена в коде выводятся из домена и этой метки — от версии счётчика не зависят:
 // новая версия меняет устройство, а адрес и имена у сайта остаются прежними.
 const NAMES_SEED = '1';
 
 const HEAD = String.raw`(function(){if(window.@G@)return;window.@G@=1;var @P@=%EV%;
-function @send@(@o@){@o@.#p#=location.pathname;var @b@=JSON.stringify(@o@);try{if(navigator.sendBeacon&&navigator.sendBeacon(@P@,new Blob([@b@],{type:'application/json'})))return}catch(@e@){}try{fetch(@P@,{method:'POST',body:@b@,keepalive:true,credentials:'omit',headers:{'Content-Type':'application/json'}})}catch(@e@){}}
+function @send@(@o@){@o@.#p#=location.pathname;%RB%var @b@=JSON.stringify(@o@);try{if(navigator.sendBeacon&&navigator.sendBeacon(@P@,new Blob([@b@],{type:'application/json'})))return}catch(@e@){}try{fetch(@P@,{method:'POST',body:@b@,keepalive:true,credentials:'same-origin',headers:{'Content-Type':'application/json'}})}catch(@e@){}}
 var @nav@={};try{@nav@=(performance.getEntriesByType&&performance.getEntriesByType('navigation')[0])||{}}catch(@e@){}
 var @r@='';try{if(document.referrer){var @ru@=new URL(document.referrer);@r@=@ru@.host===location.host?'=':@ru@.host}}catch(@e@){@r@='?'}
 if(@nav@.type==='reload'||@nav@.type==='back_forward')@r@='=';
@@ -54,12 +68,19 @@ if(@a@.host!==location.host)@send@({#k#:$out$,#l#:@label@(@bt@),#t#:@a@.host+@a@
 `
 ];
 const TAIL = '})();';
+// Версия 3: флаг робота у каждого события (встаёт на место %RB% в HEAD).
+const ROBOT = String.raw`try{if(navigator.webdriver===true)@o@.#w#=1}catch(@e@){}`;
 
-/** @param {RegExp} re */
-const tokens = (re) => [...new Set([...[HEAD, ...BLOCKS].join('').matchAll(re)].map((m) => m[1]))];
+/** @param {RegExp} re @param {string[]} [parts] */
+const tokens = (re, parts = [HEAD, ...BLOCKS]) => [...new Set([...parts.join('').matchAll(re)].map((m) => m[1]))];
+// Имена версий 1–2 выводятся из HEAD и BLOCKS в том же порядке, что и раньше;
+// всё, что добавлено позже (ROBOT, cookie своих), — после них, из того же
+// генератора: у сайта старые имена не меняются, новые добавляются в конец.
 const IDS = tokens(/@([A-Za-z]+)@/g);
 const FIELDS = tokens(/#([a-z]+)#/g);
 const KINDS = tokens(/\$([a-z]+)\$/g);
+const NEW_IDS = tokens(/@([A-Za-z]+)@/g, [ROBOT]).filter((n) => !IDS.includes(n));
+const NEW_FIELDS = tokens(/#([a-z]+)#/g, [ROBOT]).filter((n) => !FIELDS.includes(n));
 
 /** Случайные числа из 16 байт (sfc32): у одного сайта — всегда одна и та же последовательность.
  * @param {Uint8Array} x
@@ -90,6 +111,7 @@ function rng(x) {
  * @property {string} module  gsc-counter.js — модуль Pages Functions
  * @property {Record<string, string>} fields  имя поля на странице → обычное
  * @property {Record<string, string>} kinds   вид события на странице → обычный
+ * @property {string} team    имя cookie «свой» (ставит модуль на ?team=1)
  * @property {string} version
  */
 
@@ -149,12 +171,16 @@ export function counterKit(host, panelOrigin, eventsPath) {
     const j = Math.floor(rnd() * (i + 1));
     [order[i], order[j]] = [order[j], order[i]];
   }
-  const page = (HEAD + order.map((i) => BLOCKS[i]).join('') + TAIL)
+  // Версия 3 и дальше — только после всего прежнего (см. NEW_IDS).
+  for (const n of NEW_IDS) ids[n] = fresh(() => pick(rnd, LET) + (rnd() < 0.6 ? pick(rnd, LET + DIG + '_') : ''));
+  for (const n of NEW_FIELDS) fback[(fields[n] = fresh(() => word(rnd, 1, 2)))] = n;
+  const team = fresh(() => '_' + word(rnd, 4, 7));
+  const page = (HEAD.replace('%RB%', ROBOT) + order.map((i) => BLOCKS[i]).join('') + TAIL)
     .replace(/@([A-Za-z]+)@/g, (_, n) => ids[n])
     .replace(/#([a-z]+)#/g, (_, n) => fields[n])
     .replace(/\$([a-z]+)\$/g, (_, n) => JSON.stringify(kinds[n]))
     .replace(/%EV%/g, () => JSON.stringify(events));
-  return { host: h, events, page, module: kitModule(h, events, panelOrigin, fback, kback), fields: fback, kinds: kback, version: KIT_VERSION };
+  return { host: h, events, page, module: kitModule(h, events, panelOrigin, fback, kback, team), fields: fback, kinds: kback, team, version: KIT_VERSION };
 }
 
 /** @param {unknown} v */
@@ -166,9 +192,10 @@ const J = (v) => JSON.stringify(v);
  * @param {string} panelOrigin
  * @param {Record<string, string>} fields
  * @param {Record<string, string>} kinds
+ * @param {string} team
  * @returns {string}
  */
-function kitModule(host, events, panelOrigin, fields, kinds) {
+function kitModule(host, events, panelOrigin, fields, kinds, team) {
   return `// GSC Hub — единый счётчик сайта ${host}, версия ${KIT_VERSION}.
 // Файл выдаёт панель («Кнопки» → «Единый счётчик»): не править руками, новую
 // версию — скачать заново. Подключение в functions/_middleware.js:
@@ -176,6 +203,8 @@ function kitModule(host, events, panelOrigin, fields, kinds) {
 //   export const onRequest = [gscCounter, /* свой middleware сайта, если есть */];
 // Ключ — секрет Pages COUNTER_KEY. Без него ничего не отправляется,
 // GET ${events} отвечает x-counter: off.
+// Свои визиты не считаются: открыть любую страницу сайта с ?team=1 — cookie на
+// год (снять — ?team=0). Роботы (navigator.webdriver) не считаются тоже.
 const SITE = ${J(host)};
 const PANEL = ${J(panelOrigin.replace(/\/$/, '') + '/c')};
 const EVENTS = ${J(events)};
@@ -184,6 +213,8 @@ const VERSION = ${J(KIT_VERSION)};
 const FIELDS = ${J(fields)};
 const KINDS = ${J(kinds)};
 const PAGE_KINDS = new Set(['view', 'time', 'link', 'out']);
+const TEAM = ${J(team)};
+const TEAM_DAYS = 365;
 const LABEL = 'Mozilla/5.0 (compatible; site-counter)';
 const NOT_PEOPLE = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|inspection|externalhit|embedly|quora|pinterest|ahrefs|semrush|mj12|yandex|baidu|bytespider|petal|gptbot|claude|perplexity|python|curl|wget|httpclient|go-http|java\\/|node|undici|playwright|puppeteer|phantom|selenium|monitor|uptime|pingdom|statuscake|gschubcheck/i;
 
@@ -225,6 +256,28 @@ const bare = (h) => String(h || '').toLowerCase().replace(/^www\\./, '');
 function person(request, url) {
   const ua = request.headers.get('user-agent') || '';
   return bare(url.hostname) === SITE && /mozilla\\//i.test(ua) && !NOT_PEOPLE.test(ua);
+}
+
+// Сотрудник: в этом браузере открывали сайт с ?team=1 (cookie ставит teamMark).
+function teamOf(request) {
+  return (request.headers.get('cookie') || '').split(';').some((c) => c.trim() === TEAM + '=1');
+}
+
+// Не в статистику, а в журнал панели: «отброшено — свои / робот». Только
+// просмотры и переходы к оплате — по ним видно, что фильтр работает.
+function skip(ctx, why, kind, page) {
+  if (kind === 'view' || kind === 'submit') send(ctx, { k: 'skip', l: why, t: kind, p: cut(page, 300) || '/' });
+}
+
+// ?team=1 на любой странице — пометить браузер своим на год, ?team=0 — снять.
+// Ставит сервер (HttpOnly): коду страницы cookie не нужен и не виден.
+function teamMark(url, res) {
+  const v = url.searchParams.get('team');
+  if ((v !== '1' && v !== '0') || bare(url.hostname) !== SITE) return res;
+  const out = new Response(res.body, res);
+  out.headers.append('Set-Cookie', TEAM + '=' + (v === '1' ? '1; Max-Age=' + TEAM_DAYS * 86400 : '; Max-Age=0') + '; Path=/; Secure; HttpOnly; SameSite=Lax');
+  out.headers.set('Cache-Control', 'no-store');
+  return out;
 }
 
 let lastPing = 0;
@@ -272,6 +325,9 @@ async function receive(ctx, url) {
   for (const [k, v] of Object.entries(o)) if (Object.prototype.hasOwnProperty.call(FIELDS, k)) ev[FIELDS[k]] = v;
   const kind = Object.prototype.hasOwnProperty.call(KINDS, ev.k) ? KINDS[ev.k] : '';
   if (!PAGE_KINDS.has(kind)) return reply();
+  // Свои и роботы — не в статистику (см. начало файла).
+  if (teamOf(request)) return skip(ctx, 'team', kind, ev.p), reply();
+  if (ev.w) return skip(ctx, 'robot', kind, ev.p), reply();
   const out = { k: kind, p: cut(ev.p, 300) || '/' };
   if (kind === 'view') out.r = cut(ev.r, 120);
   else if (kind === 'time') {
@@ -303,6 +359,7 @@ function checkout(ctx, url, res) {
   let from = null;
   try { const r = new URL(request.headers.get('referer') || ''); if (bare(r.hostname) === bare(url.hostname)) from = r.pathname; } catch { /* без Referer */ }
   if (!from || !person(request, url)) return;
+  if (teamOf(request)) return skip(ctx, 'team', 'submit', from);
   const what = [...url.searchParams.values()].map((v) => cut(v, 20)).filter(Boolean).join(' ');
   send(ctx, { k: 'submit', p: cut(from, 300), l: cut(('checkout ' + what).trim(), 80), t: cut(url.pathname, 300) });
 }
@@ -312,7 +369,7 @@ export async function gscCounter(ctx) {
   if (url.pathname === EVENTS || url.pathname === EVENTS.slice(0, -1)) return receive(ctx, url);
   const res = await ctx.next();
   try { checkout(ctx, url, res); } catch { /* счётчик не ломает сайт */ }
-  return res;
+  try { return teamMark(url, res); } catch { return res; }
 }
 
 export const onRequest = gscCounter;

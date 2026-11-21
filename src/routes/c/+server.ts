@@ -75,6 +75,15 @@ export const POST: RequestHandler = async ({ request }) => {
     } catch {
       rawEvent = null;
     }
+    // Счётчик v3: свой визит (?team=1) или робот (navigator.webdriver) — сайт
+    // в статистику его не прислал, только отметку для журнала приёма.
+    if (rawEvent && rawEvent.k === 'skip') {
+      host = rawHost;
+      kind = (rawEvent as { t?: unknown }).t === 'submit' ? 'submit' : 'view';
+      if (keyOk) log((rawEvent as { l?: unknown }).l === 'team' ? 'team' : 'robot');
+      else if (rawHost && (await isKnownHost(rawHost))) log('bad-key');
+      return EMPTY();
+    }
     if (rawEvent && rawEvent.k === 'test') {
       host = rawHost;
       kind = 'test';

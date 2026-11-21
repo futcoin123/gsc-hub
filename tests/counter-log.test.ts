@@ -114,6 +114,18 @@ describe('вывод по сайту', () => {
     ], t);
     expect(v).toEqual([{ level: 'ok', text: 'Принято 18 событий (последнее 3): просмотры с источником, время, переходы к оплате.' }]);
   });
+  it('свои визиты и роботы (счётчик v3) — не ошибка, но видно, сколько не засчитано', () => {
+    const v = counterVerdict([
+      { kind: 'view', outcome: 'ok', n: 5, lastAt: 1 },
+      { kind: 'time', outcome: 'ok', n: 5, lastAt: 1 },
+      { kind: 'view', outcome: 'team', n: 3, lastAt: 2 },
+      { kind: 'submit', outcome: 'team', n: 1, lastAt: 2 },
+      { kind: 'view', outcome: 'robot', n: 7, lastAt: 2 }
+    ], t);
+    expect(v).toEqual([{ level: 'ok', text: 'Принято 10 событий (последнее 1): просмотры с источником, время. Не засчитаны свои визиты (метка ?team=1) — 3 просмотров, 1 переходов к оплате; роботы (navigator.webdriver: Playwright, headless) — 7 просмотров.' }]);
+    // Были только свои и роботы — связь есть, это не «просмотры не приходят».
+    expect(counterVerdict([{ kind: 'view', outcome: 'robot', n: 2, lastAt: 2 }], t)).toEqual([{ level: 'ok', text: 'Связь с панелью есть. Посетителей, кроме своих и роботов, не было: не засчитаны роботы (navigator.webdriver: Playwright, headless) — 2 просмотров.' }]);
+  });
 });
 
 describe('проверка счётчиков: с последней удачной проверки связи', () => {

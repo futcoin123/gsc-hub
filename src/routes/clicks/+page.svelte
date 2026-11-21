@@ -185,8 +185,10 @@
   // называлась «события отброшены» (mit-hund-urlaub.de, 17.11.2026).
   function quietLabel(h: string): string {
     const rows = (data.counterLog[h]?.rows ?? []) as { kind: string; outcome: string }[];
-    const real = rows.filter((r) => r.kind !== 'test');
+    // Свои визиты и роботы (счётчик v3) — не поломка.
+    const real = rows.filter((r) => r.kind !== 'test' && r.outcome !== 'team' && r.outcome !== 'robot');
     if (real.some((r) => r.outcome !== 'ok')) return 'события отброшены';
+    if (rows.some((r) => r.outcome === 'team' || r.outcome === 'robot')) return 'были только свои и роботы';
     const tests = rows.filter((r) => r.kind === 'test');
     if (tests.some((r) => r.outcome === 'ok')) return 'связь есть, посетителей ещё не было';
     if (tests.length) return 'ключ сайта не подходит';
@@ -197,7 +199,7 @@
   let kitEvents = $state('');
   let kit = $state<{ host: string; events: string; version: string; page: string; module: string } | null>(null);
   let kitErr = $state<string | null>(null);
-  let ping = $state<{ step: string; target: string; status?: number; detail?: string } | null>(null);
+  let ping = $state<{ step: string; target: string; status?: number; detail?: string; kit?: string; latest?: string } | null>(null);
   let pingBusy = $state(false);
   const kitQuery = () => `h=${encodeURIComponent(kitHost)}${kitEvents.trim() ? `&e=${encodeURIComponent(kitEvents.trim())}` : ''}`;
   async function loadKit() {
@@ -381,6 +383,21 @@
           переход к оплате. У каждого сайта свои имена переменных, полей и свой адрес событий — снаружи сайты не связать. В браузер
           ничего не пишется; вместо IP — код посетителя, один и тот же у человека весь день (отказы и источник оплаты считаются верно).
         </p>
+        <p class="mb-2 max-w-4xl">
+          С версии 3 не считаются <b>роботы</b> — браузеры с <code>navigator.webdriver</code> (Playwright, Puppeteer, Selenium, headless) — и
+          <b>свои визиты</b>: откройте любую страницу сайта со ссылкой <code>?team=1</code> — сайт запомнит этот браузер на год (cookie ставит
+          сервер сайта, посетителям ничего не пишется), снять метку — <code>?team=0</code>. Метка своя у каждого сайта и у каждого браузера.
+          Сколько отброшено, видно в «Проверке счётчиков».
+        </p>
+        {#if data.hosts.length}
+          <details class="mb-2">
+            <summary class="cursor-pointer select-none text-ink-2 hover:text-acc">Отметить этот браузер своим на всех сайтах ({data.hosts.length})</summary>
+            <p class="my-1 text-ink-3">Откройте каждую ссылку один раз (в новой вкладке). Работает на сайтах со счётчиком версии 3.</p>
+            <div class="flex flex-wrap gap-x-3 gap-y-1">
+              {#each data.hosts as h (h)}<a class="pii text-acc hover:underline" href="https://{h}/?team=1" target="_blank" rel="noopener noreferrer">{h}</a>{/each}
+            </div>
+          </details>
+        {/if}
         <div class="mb-2 flex flex-wrap items-center gap-2">
           <select class="pii input h-7 w-auto text-xs" bind:value={kitHost} onchange={() => { kit = null; ping = null; }} aria-label="Сайт">
             <option value="">— сайт —</option>
@@ -394,6 +411,7 @@
         {#if ping}
           <p class="mb-2 rounded border px-2 py-1.5 {ping.step === 'ok' ? 'border-up/40 bg-up/10 text-ink' : 'border-warn bg-warn-t text-ink'}">
             <span class="font-semibold">{ping.step === 'ok' ? 'Работает.' : 'Не работает.'}</span> {PING_TEXT[ping.step] ?? ping.step}
+            {#if ping.kit && ping.latest && ping.kit !== ping.latest}<span class="font-semibold text-warn"> На сайте счётчик версии {ping.kit}, свежая — {ping.latest}: перевыложите оба файла (кнопка «Показать код»).</span>{/if}
             {#if ping.target}<span class="pii text-ink-3"> · {ping.target}{ping.status ? ` · ответ ${ping.status}` : ''}{ping.detail ? ` · ${ping.detail}` : ''}</span>{/if}
           </p>
         {/if}
