@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { Db } from './db';
 import { localToday } from './gsc-calendar';
 import { storedSource } from '$lib/utils/traffic-source';
+import { ledger, visitorFlagged } from './own-visitors';
 
 export const CLICK_KINDS = ['submit', 'button', 'out', 'link', 'view'] as const;
 export type ClickKind = (typeof CLICK_KINDS)[number];
@@ -182,14 +183,18 @@ export function entrySource(ip: string, host: string, now: number = Date.now()):
 // Визит считается, когда закончился: новый вход или 30 минут тишины. Посетитель
 // узнаётся так же, как для источника переходов к оплате (код вместо IP), и
 // только в памяти панели; в базу пишутся лишь суммы за день по сайту.
-const visits = new Map<string, { host: string; day: string; at: number; engaged: boolean }>();
+type Visit = { vid: string; host: string; day: string; at: number; engaged: boolean };
+const visits = new Map<string, Visit>();
 let lastSweep = 0;
 
-function closeVisit(db: Db, v: { host: string; day: string; engaged: boolean }): void {
+function closeVisit(db: Db, v: Visit): void {
+  // Посетителя узнали своим или роботом, пока визит шёл, — визит не в счёт.
+  if (visitorFlagged(db, v.vid)) return;
   db.prepare(
     `INSERT INTO visit_stats (day, host, visits, bounces) VALUES (?, ?, 1, ?)
      ON CONFLICT(day, host) DO UPDATE SET visits = visits + 1, bounces = bounces + excluded.bounces`
   ).run(v.day, v.host, v.engaged ? 0 : 1);
+  ledger(db, v.vid, { what: 'visit', day: v.day, host: v.host, label: v.engaged ? 'engaged' : 'bounce' });
 }
 
 /** Закрыть визиты, в которых 30 минут ничего не происходило. */
@@ -213,7 +218,7 @@ export function trackVisit(db: Db, ip: string, host: string, kind: string, targe
   if (kind === 'view' && target !== '' && target !== '(internal)') {
     // Новый вход: прошлый визит этого посетителя на этом сайте закончился.
     if (cur) closeVisit(db, cur);
-    visits.set(k, { host, day: localToday(now), at: now, engaged: false });
+    visits.set(k, { vid: ip, host, day: localToday(now), at: now, engaged: false });
     return;
   }
   if (!cur || now - cur.at >= ENTRY_MS) return;

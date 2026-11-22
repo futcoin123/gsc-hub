@@ -16,6 +16,7 @@ export type ConfigKey =
   | 'DATAFORSEO_LOGIN'
   | 'DATAFORSEO_PASSWORD'
   | 'COUNTER_KEY'
+  | 'TEAM_LINK_TOKEN'
   | 'UPTIME_INTERVAL_H';
 
 function envVal(key: ConfigKey): string | undefined {

@@ -7,6 +7,7 @@ import { als } from './request-context';
 import { env } from '$env/dynamic/private';
 import { getConfigValue, isSetupComplete } from './config';
 import { isExposedRequest } from './exposure';
+import { clientIp, rememberTeamIp } from './own-visitors';
 
 export function isPublicPath(path: string): boolean {
   return (
@@ -26,6 +27,9 @@ export function isPublicPath(path: string): boolean {
     path === '/key-map/public-key' ||
     // Политика конфиденциальности: Google требует открытую ссылку на неё.
     path === '/privacy' ||
+    // Ссылка для сотрудников «я свой» (с секретом в адресе): запоминает IP,
+    // чтобы их визиты на сайты не считались. Без секрета — 404.
+    path.startsWith('/svoi/') ||
     // Клиенты MCP (claude.ai) ищут здесь настройки OAuth; пусть получат 404,
     // а не редирект на форму входа.
     path.startsWith('/.well-known/') ||
@@ -37,7 +41,8 @@ export function isPublicPath(path: string): boolean {
 }
 
 export function isManagerAllowed(path: string): boolean {
-  return path === '/' || path === '/logout' || path.startsWith('/auth/');
+  // /team/ip — браузер сообщает свой IP: менеджеры тоже свои.
+  return path === '/' || path === '/logout' || path.startsWith('/auth/') || path === '/team/ip';
 }
 
 export function requireAdmin(locals: App.Locals): void {
@@ -150,5 +155,19 @@ export const authGuard: Handle = async ({ event, resolve }) => {
 
   const effectiveUser = decision.asLocalAdmin ? LOCAL_ADMIN : user;
   event.locals.user = effectiveUser;
+  // Кто заходит в панель — свой: его визиты на сайты не считаются (own-visitors.ts).
+  if (effectiveUser) {
+    try {
+      let socket = '';
+      try {
+        socket = event.getClientAddress();
+      } catch {
+        /* адреса сокета нет (тесты, prerender) */
+      }
+      rememberTeamIp(database, clientIp(event.request, socket), 'panel');
+    } catch {
+      /* учёт своих не должен ломать панель */
+    }
+  }
   return als.run({ userId: effectiveUser?.id ?? null }, async () => resolve(event));
 };

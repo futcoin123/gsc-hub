@@ -12,6 +12,7 @@ import { activeGroupHosts } from '$lib/server/site-groups';
 import { bingConfigured, bingTotals, getBing } from '$lib/server/bing';
 import { counterChecks } from '$lib/server/counter-log';
 import { localToday } from '$lib/server/gsc-calendar';
+import { listTeamIps, rememberTeamIp, removeTeamIp, teamLinkToken, ownSkippedToday, cleanIp } from '$lib/server/own-visitors';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
@@ -95,7 +96,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     // последней успешной проверки связи (если она была за 7 дней), иначе за 7 дней.
     counterLog: Object.fromEntries(Object.entries(counterChecks(db(), localToday(Date.now() - 6 * 86400_000))).filter(([h]) => mine(h))),
     counterLogStart: (db().prepare('SELECT substr(MIN(day), 1, 10) AS d FROM counter_log').get() as { d: string | null }).d,
-    gscImpr, gscErr, noConsole, bing, bingState, bingLatest, lastSeen: seen, errors, workerCode: workerScript(url.origin), counterKey: ensureCounterKey(db()), keys: listCounterKeys(db()) };
+    gscImpr, gscErr, noConsole, bing, bingState, bingLatest, lastSeen: seen, errors, workerCode: workerScript(url.origin), counterKey: ensureCounterKey(db()), keys: listCounterKeys(db()),
+    // Свои визиты и роботы не в статистику (own-visitors.ts): IP своих, ссылка для сотрудников, сколько не засчитано сегодня.
+    team: { ips: listTeamIps(db()), link: `${url.origin}/svoi/${teamLinkToken(db())}`, today: ownSkippedToday(db(), localToday()) } };
 };
 
 export const actions: Actions = {
@@ -105,6 +108,24 @@ export const actions: Actions = {
     requireAdmin(locals);
     ensureCounterKey(db(), true);
     return { rotated: true };
+  },
+  // Свои: IP руками, убрать IP, новая ссылка для сотрудников (старая перестаёт работать).
+  addTeamIp: async ({ locals, request }) => {
+    requireAdmin(locals);
+    const raw = String((await request.formData()).get('ip') ?? '');
+    if (!cleanIp(raw)) return fail(400, { teamError: 'Это не IP из интернета (нужен вида 93.184.216.34 или 2a02:810d::1)' });
+    rememberTeamIp(db(), raw, 'manual');
+    return { teamAdded: true };
+  },
+  removeTeamIp: async ({ locals, request }) => {
+    requireAdmin(locals);
+    removeTeamIp(db(), String((await request.formData()).get('ip') ?? ''));
+    return { teamRemoved: true };
+  },
+  rotateTeamLink: ({ locals }) => {
+    requireAdmin(locals);
+    teamLinkToken(db(), true);
+    return { teamRotated: true };
   },
   revokeKey: async ({ locals, request }) => {
     requireAdmin(locals);

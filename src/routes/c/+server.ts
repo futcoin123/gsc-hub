@@ -5,6 +5,8 @@ import { siteHostname } from '$lib/utils/url-filters';
 import { counterKeyOk } from '$lib/server/config';
 import { allowClick, checkoutVerdict, clicksToday, countedHosts, entrySource, isBotUA, markSeen, normHost, parseWorkerEvent, recordCheckoutSource, recordClick, recordTime, rememberEntry, trackVisit, workerEventInput } from '$lib/server/button-clicks';
 import { logCounter, logKind, type CounterOutcome } from '$lib/server/counter-log';
+import { ledger, ownVisitor } from '$lib/server/own-visitors';
+import { localToday } from '$lib/server/gsc-calendar';
 
 // Приём событий счётчика от Cloudflare Worker ваших сайтов (без входа, но с
 // секретным ключом). Считаем только ваши сайты из подключённых консолей,
@@ -75,15 +77,6 @@ export const POST: RequestHandler = async ({ request }) => {
     } catch {
       rawEvent = null;
     }
-    // Счётчик v3: свой визит (?team=1) или робот (navigator.webdriver) — сайт
-    // в статистику его не прислал, только отметку для журнала приёма.
-    if (rawEvent && rawEvent.k === 'skip') {
-      host = rawHost;
-      kind = (rawEvent as { t?: unknown }).t === 'submit' ? 'submit' : 'view';
-      if (keyOk) log((rawEvent as { l?: unknown }).l === 'team' ? 'team' : 'robot');
-      else if (rawHost && (await isKnownHost(rawHost))) log('bad-key');
-      return EMPTY();
-    }
     if (rawEvent && rawEvent.k === 'test') {
       host = rawHost;
       kind = 'test';
@@ -111,11 +104,20 @@ export const POST: RequestHandler = async ({ request }) => {
       log('bot');
       return EMPTY();
     }
+    // Свои (IP из панели, сайты на разных языках за день) и роботы (много
+    // страниц за минуту) — не в статистику; см. own-visitors.ts.
+    const own = ownVisitor(db(), ip, host, 'time' in parsed ? parsed.time.page : parsed.click.page, 'time' in parsed ? 'time' : parsed.click.kind);
+    if (own) {
+      log(own);
+      return EMPTY();
+    }
+    const day = localToday();
     // Сайта может не быть в Search Console (владелица добавляет сайты туда сама,
     // когда ей нужно): верный ключ есть только у её сайтов — событие принимаем.
     if ('time' in parsed) {
       if (allowClick(ip, { host, page: parsed.time.page, kind: 'view', label: 'time:' + Date.now(), target: '' })) {
-        recordTime(db(), parsed.time);
+        recordTime(db(), parsed.time, day);
+        ledger(db(), ip, { what: 'time', day, host, page: parsed.time.page, n: parsed.time.seconds });
         markSeen(db(), ip, host);
         log('ok');
       } else log('limit');
@@ -135,12 +137,17 @@ export const POST: RequestHandler = async ({ request }) => {
         return EMPTY();
       }
     } else markSeen(db(), ip, host);
-    recordClick(db(), parsed.click);
+    recordClick(db(), parsed.click, day);
+    ledger(db(), ip, { what: 'click', day, host, page: parsed.click.page, kind: parsed.click.kind, label: parsed.click.label, target: parsed.click.target });
     log('ok');
     // Источник перехода к оплате — по входу того же посетителя (см. rememberEntry).
     trackVisit(db(), ip, host, parsed.click.kind, parsed.click.target);
     if (parsed.click.kind === 'view') rememberEntry(ip, host, parsed.click.target);
-    else if (parsed.click.kind === 'submit') recordCheckoutSource(db(), host, entrySource(ip, host));
+    else if (parsed.click.kind === 'submit') {
+      const source = entrySource(ip, host);
+      recordCheckoutSource(db(), host, source, day);
+      ledger(db(), ip, { what: 'checkout', day, host, label: source || '(unknown)' });
+    }
   } catch {
     /* счётчик не должен ломать сайт */
   }

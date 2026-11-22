@@ -42,7 +42,7 @@ async function site(mod: Mod, path: string, init: { method?: string; body?: stri
 }
 
 /** Код страницы в имитации браузера: что он отправил и обработчики событий. */
-function runPage(page: string, opts: { referrer?: string; search?: string; path?: string; webdriver?: boolean } = {}) {
+function runPage(page: string, opts: { referrer?: string; search?: string; path?: string } = {}) {
   const beacons: Promise<{ url: string; body: string }>[] = [];
   const listeners: Record<string, ((e: unknown) => void)[]> = {};
   const clock = { t: 1_000_000 };
@@ -54,7 +54,7 @@ function runPage(page: string, opts: { referrer?: string; search?: string; path?
   const win: Record<string, unknown> = {
     document: doc,
     location: { pathname: opts.path ?? '/', host: SITE, href: `https://${SITE}${opts.path ?? '/'}${opts.search ?? ''}`, search: opts.search ?? '' },
-    navigator: { webdriver: opts.webdriver ?? false, sendBeacon: (url: string, blob: Blob) => (beacons.push(blob.text().then((body) => ({ url, body }))), true) },
+    navigator: { sendBeacon: (url: string, blob: Blob) => (beacons.push(blob.text().then((body) => ({ url, body }))), true) },
     performance: { getEntriesByType: () => [{ type: 'navigate' }] },
     Blob, URL, URLSearchParams, JSON, Math, Object, String, Number,
     Date: { now: () => clock.t },
@@ -66,10 +66,10 @@ function runPage(page: string, opts: { referrer?: string; search?: string; path?
 }
 
 /** Отправить то, что страница послала, через модуль сайта (как браузер на адрес событий). */
-async function deliver(mod: Mod, beacons: Promise<{ url: string; body: string }>[], events: string, extra: Record<string, string> = {}) {
+async function deliver(mod: Mod, beacons: Promise<{ url: string; body: string }>[], events: string) {
   for (const b of await Promise.all(beacons.splice(0))) {
     expect(b.url).toBe(events);
-    const res = await site(mod, events, { method: 'POST', body: b.body, headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', origin: `https://${SITE}`, ...extra } });
+    const res = await site(mod, events, { method: 'POST', body: b.body, headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', origin: `https://${SITE}` } });
     expect(res.status).toBe(204);
   }
 }
@@ -106,7 +106,7 @@ describe('единый счётчик: код и файлы', () => {
     expect(a.page).not.toMatch(/sessionStorage|localStorage|document\.cookie|sslip|panel\.example/);
     expect(a.page).toContain('"/segnale/"');
     expect(a.module).toContain('const SITE = "futcoin.it"');
-    expect(Object.values(a.fields).sort()).toEqual(['b', 'c', 'd', 'k', 'l', 'p', 'r', 't', 'w']);
+    expect(Object.values(a.fields).sort()).toEqual(['b', 'c', 'd', 'k', 'l', 'p', 'r', 't']);
   });
   it('адрес событий — одно-два слова сайта (у старых сайтов остаётся свой)', () => {
     expect(cleanEventsPath('segnale')).toBe('/segnale/');
@@ -117,11 +117,8 @@ describe('единый счётчик: код и файлы', () => {
 
   it('новая версия не меняет имена у сайта (futcoin.it на версии 1 работает с этими же)', () => {
     const k = counterKit(SITE, 'https://panel.example', '/segnale/');
-    // Версия 3 только добавляет поле флага робота (w) — прежние имена те же.
-    expect(k.fields).toEqual({ dz: 'p', ju: 'k', k: 'r', t: 'd', i: 'l', dw: 't', od: 'c', o: 'b', k8: 'w' });
+    expect(k.fields).toEqual({ dz: 'p', ju: 'k', k: 'r', t: 'd', i: 'l', dw: 't', od: 'c', o: 'b' });
     expect(k.kinds).toEqual({ yg: 'view', kra: 'time', nl: 'link', b: 'out' });
-    expect(k.events).toBe('/segnale/');
-    expect(k.version).toBe('3');
   });
 });
 
@@ -223,84 +220,5 @@ describe('единый счётчик: страница → сайт → пан�
     });
     await Promise.all(waits);
     expect(clicksForRange(testDb, today(), today())[0]).toMatchObject({ host: 'new-site.de', kind: 'view', target: 'google.de' });
-  });
-});
-
-describe('единый счётчик v3: свои визиты и роботы не считаются', () => {
-  const checkout = (headers: Record<string, string> = {}) => ({
-    headers: { 'sec-fetch-dest': 'document', referer: `https://${SITE}/`, ...headers },
-    next: () => new Response(null, { status: 302, headers: { location: 'https://cassa.example/offer/1' } })
-  });
-
-  it('робот (navigator.webdriver): просмотр, время и оплата — не в статистике, в журнале «робот»', async () => {
-    const kit = counterKit(SITE, 'https://panel.example', '/segnale/');
-    const mod = await loadModule(kit.module);
-    const p = runPage(kit.page, { referrer: 'https://www.google.com/', webdriver: true });
-    // Событие уходит как обычно (проверки сайтов в Playwright видят просмотр), но с флагом.
-    const [b] = await Promise.all(p.beacons);
-    const flag = Object.keys(kit.fields).find((x) => kit.fields[x] === 'w')!;
-    expect(JSON.parse(b.body)[flag]).toBe(1);
-    // Без webdriver флага нет.
-    const [human] = await Promise.all(runPage(kit.page).beacons);
-    expect(JSON.parse(human.body)[flag]).toBeUndefined();
-    p.clock.t += 20_000;
-    p.doc.visibilityState = 'hidden';
-    p.fire('visibilitychange');
-    await deliver(mod, p.beacons, kit.events);
-    await site(mod, '/pagamento/?p=ps&n=1', checkout());
-    expect(clicksForRange(testDb, today(), today())).toEqual([]);
-    expect(timeForRange(testDb, today(), today())).toEqual([]);
-    expect(visitStatsForRange(testDb, today(), today(), Date.now() + 40 * 60_000)).toEqual([]);
-    const log = counterLogSince(testDb, '2000-01-01')[SITE];
-    expect(log).toContainEqual(expect.objectContaining({ kind: 'view', outcome: 'robot', n: 1 }));
-    // Оплата робота: просмотра не было — «без просмотра», не засчитана.
-    expect(log).toContainEqual(expect.objectContaining({ kind: 'submit', outcome: 'no-visit', n: 1 }));
-  });
-
-  it('?team=1 — сайт ставит cookie на год (только сервером), ?team=0 — снимает', async () => {
-    const kit = counterKit(SITE, 'https://panel.example', '/segnale/');
-    const mod = await loadModule(kit.module);
-    const on = await site(mod, '/?team=1');
-    expect(on.headers.get('set-cookie')).toBe(`${kit.team}=1; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`);
-    expect(on.headers.get('cache-control')).toBe('no-store');
-    expect(await on.text()).toBe('<html></html>');
-    const off = await site(mod, '/crediti-fifa-27/?team=0');
-    expect(off.headers.get('set-cookie')).toBe(`${kit.team}=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax`);
-    // Без метки и на чужом адресе (*.pages.dev) — ничего не ставит.
-    expect((await site(mod, '/')).headers.get('set-cookie')).toBeNull();
-    expect(panelCalls).toEqual([]);
-  });
-
-  it('свой (cookie метки): просмотр, нажатие, время и оплата — не в статистике, в журнале «свои»', async () => {
-    const kit = counterKit(SITE, 'https://panel.example', '/segnale/');
-    const mod = await loadModule(kit.module);
-    const cookie = { cookie: `other=x; ${kit.team}=1` };
-    const p = runPage(kit.page, { referrer: 'https://www.google.com/' });
-    const el = { tagName: 'A', innerText: 'Vai al pagamento', closest: () => el, hasAttribute: () => false, getAttribute: (a: string) => ({ href: '/pagamento/?p=ps', class: 'btn' } as Record<string, string>)[a] ?? null };
-    p.fire('click', { target: el });
-    p.clock.t += 9_000;
-    p.doc.visibilityState = 'hidden';
-    p.fire('visibilitychange');
-    await deliver(mod, p.beacons, kit.events, cookie);
-    await site(mod, '/pagamento/?p=ps&n=1', checkout(cookie));
-    expect(clicksForRange(testDb, today(), today())).toEqual([]);
-    expect(timeForRange(testDb, today(), today())).toEqual([]);
-    const log = counterLogSince(testDb, '2000-01-01')[SITE];
-    expect(log).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'view', outcome: 'team', n: 1 }),
-      expect.objectContaining({ kind: 'submit', outcome: 'team', n: 1 })
-    ]));
-    // Нажатия и время своих в журнал не пишутся — только просмотры и оплаты.
-    expect(log.every((r) => r.kind === 'view' || r.kind === 'submit')).toBe(true);
-  });
-
-  it('обычный посетитель рядом со своими считается как раньше', async () => {
-    const kit = counterKit(SITE, 'https://panel.example', '/segnale/');
-    const mod = await loadModule(kit.module);
-    const p = runPage(kit.page, { referrer: 'https://www.google.com/' });
-    await deliver(mod, p.beacons, kit.events, { cookie: `${kit.team}=0; ${kit.team}x=1` });
-    await site(mod, '/pagamento/?p=ps&n=1', checkout());
-    const rows = clicksForRange(testDb, today(), today());
-    expect(rows.map((r) => r.kind).sort()).toEqual(['submit', 'view']);
   });
 });

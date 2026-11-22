@@ -153,6 +153,24 @@
     update = readUpdate();
     // The banner is for signed-in operators only, so an anonymous login page
     // has no reason to reach out to github.com on the visitor's behalf.
+    // Свои визиты не в статистику: браузер раз в час сообщает панели свои IP
+    // (IPv6 панель сама не видит) — см. own-visitors.ts.
+    if (user) {
+      let last = 0;
+      try {
+        last = Number(localStorage.getItem('gsc-hub:team-ip-at')) || 0;
+      } catch {
+        /* без памяти — спросим сейчас */
+      }
+      if (Date.now() - last > 3600_000) {
+        try {
+          localStorage.setItem('gsc-hub:team-ip-at', String(Date.now()));
+        } catch {
+          /* ignore */
+        }
+        void import('$lib/team-ip').then((m) => m.reportIps('/team/ip'));
+      }
+    }
     if (!updateCheck || !user || !version) return;
     if (!shouldCheck(update?.checkedAt ?? null, Date.now())) return;
     void checkForUpdate();

@@ -185,7 +185,7 @@
   // называлась «события отброшены» (mit-hund-urlaub.de, 17.11.2026).
   function quietLabel(h: string): string {
     const rows = (data.counterLog[h]?.rows ?? []) as { kind: string; outcome: string }[];
-    // Свои визиты и роботы (счётчик v3) — не поломка.
+    // Свои и роботы — не поломка.
     const real = rows.filter((r) => r.kind !== 'test' && r.outcome !== 'team' && r.outcome !== 'robot');
     if (real.some((r) => r.outcome !== 'ok')) return 'события отброшены';
     if (rows.some((r) => r.outcome === 'team' || r.outcome === 'robot')) return 'были только свои и роботы';
@@ -199,7 +199,7 @@
   let kitEvents = $state('');
   let kit = $state<{ host: string; events: string; version: string; page: string; module: string } | null>(null);
   let kitErr = $state<string | null>(null);
-  let ping = $state<{ step: string; target: string; status?: number; detail?: string; kit?: string; latest?: string } | null>(null);
+  let ping = $state<{ step: string; target: string; status?: number; detail?: string } | null>(null);
   let pingBusy = $state(false);
   const kitQuery = () => `h=${encodeURIComponent(kitHost)}${kitEvents.trim() ? `&e=${encodeURIComponent(kitEvents.trim())}` : ''}`;
   async function loadKit() {
@@ -371,6 +371,60 @@
       </details>
     {/if}
 
+    <!-- Свои визиты и роботы не в статистику — решает панель, счётчик на сайтах не меняется (own-visitors.ts). -->
+    <details class="border-b border-line">
+      <summary class="cursor-pointer select-none px-3 py-2 text-xs hover:bg-sunk">
+        <span class="font-semibold text-ink">Свои визиты и роботы не считаются</span>
+        <span class="text-ink-3">· сегодня не засчитано событий: своих {data.team.today.team}, роботов {data.team.today.robot} · IP своих: {data.team.ips.length}</span>
+      </summary>
+      <div class="space-y-2 px-3 pb-3 text-xs text-ink-2">
+        <p class="max-w-4xl">
+          Счётчик на сайтах прежний — всё решает панель: она знает ключ счётчика и сама считает код посетителя для любого IP. Не считаются
+          (ни просмотры, ни время, ни визит и отказ, ни переход к оплате):
+        </p>
+        <ul class="ml-4 max-w-4xl list-disc space-y-0.5">
+          <li><b>свои по IP</b> — каждый, кто заходит в эту панель (IP запоминается сам, вместе с IPv6 от браузера), и сотрудники, открывшие ссылку ниже; IP хранится 30 дней с последнего захода;</li>
+          <li><b>свои по поведению</b> — за день открывал сайты на двух и более языках, кроме английского (итальянский и польский сайт в один день — это проверка сети, а не покупатель);</li>
+          <li><b>роботы</b> — 10 и больше страниц за минуту.</li>
+        </ul>
+        <p class="max-w-4xl">Если посетителя узнали не с первого события, всё, что он успел за день, вычитается. Сколько не засчитано по сайту — в «Проверке счётчиков».</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-semibold text-ink">Ссылка для сотрудников:</span>
+          <code class="pii max-w-[28rem] truncate rounded bg-sunk px-1.5 py-0.5">{data.team.link}</code>
+          <button type="button" class="btn btn-sec btn-sm" onclick={() => copy(data.team.link, 'team')}>{copied === 'team' ? 'Скопировано ✓' : 'Копировать'}</button>
+          <form method="POST" action="?/rotateTeamLink" use:enhance={({ cancel }) => { if (!confirm('Выдать новую ссылку? Старая перестанет работать (уже запомненные IP останутся).')) cancel(); }}>
+            <button class="btn btn-ghost btn-sm">Новая ссылка</button>
+          </form>
+        </div>
+        <p class="max-w-4xl text-ink-3">Сотрудник открывает её один раз на каждом устройстве (телефон, компьютер) — и снова, если сменился интернет (другой Wi-Fi, мобильный). Входить в панель не нужно.</p>
+        <form method="POST" action="?/addTeamIp" use:enhance class="flex flex-wrap items-center gap-2">
+          <input class="input h-7 w-64 text-xs" name="ip" placeholder="IP своего, напр. 93.184.216.34" aria-label="IP своего" />
+          <button class="btn btn-sec btn-sm">Добавить IP</button>
+        </form>
+        {#if form?.teamError}<p class="text-bad">{form.teamError}</p>{/if}
+        {#if data.team.ips.length}
+          <table class="app-table max-w-3xl rounded border border-line bg-pane" data-nostick>
+            <thead><tr><th>IP</th><th>Откуда</th><th>Последний раз</th><th></th></tr></thead>
+            <tbody>
+              {#each data.team.ips as t (t.ip)}
+                <tr>
+                  <td class="pii font-mono">{t.ip}</td>
+                  <td>{({ panel: 'заходил в панель', browser: 'браузер панели', link: 'ссылка сотрудника', manual: 'вписан руками' } as Record<string, string>)[t.source] ?? t.source}</td>
+                  <td class="whitespace-nowrap">{new Date(t.lastAt).toLocaleString('ru-RU', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                  <td class="text-right">
+                    <form method="POST" action="?/removeTeamIp" use:enhance>
+                      <input type="hidden" name="ip" value={t.ip} />
+                      <button class="btn btn-ghost btn-sm text-bad" title="Это не свой IP — визиты с него снова считаются">Убрать</button>
+                    </form>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
+      </div>
+    </details>
+
     <!-- Единый счётчик: один код на все сайты, у каждого свои имена; ставится и проверяется отсюда. -->
     <details class="border-b border-line">
       <summary class="cursor-pointer select-none px-3 py-2 text-xs hover:bg-sunk">
@@ -383,21 +437,6 @@
           переход к оплате. У каждого сайта свои имена переменных, полей и свой адрес событий — снаружи сайты не связать. В браузер
           ничего не пишется; вместо IP — код посетителя, один и тот же у человека весь день (отказы и источник оплаты считаются верно).
         </p>
-        <p class="mb-2 max-w-4xl">
-          С версии 3 не считаются <b>роботы</b> — браузеры с <code>navigator.webdriver</code> (Playwright, Puppeteer, Selenium, headless) — и
-          <b>свои визиты</b>: откройте любую страницу сайта со ссылкой <code>?team=1</code> — сайт запомнит этот браузер на год (cookie ставит
-          сервер сайта, посетителям ничего не пишется), снять метку — <code>?team=0</code>. Метка своя у каждого сайта и у каждого браузера.
-          Сколько отброшено, видно в «Проверке счётчиков».
-        </p>
-        {#if data.hosts.length}
-          <details class="mb-2">
-            <summary class="cursor-pointer select-none text-ink-2 hover:text-acc">Отметить этот браузер своим на всех сайтах ({data.hosts.length})</summary>
-            <p class="my-1 text-ink-3">Откройте каждую ссылку один раз (в новой вкладке). Работает на сайтах со счётчиком версии 3.</p>
-            <div class="flex flex-wrap gap-x-3 gap-y-1">
-              {#each data.hosts as h (h)}<a class="pii text-acc hover:underline" href="https://{h}/?team=1" target="_blank" rel="noopener noreferrer">{h}</a>{/each}
-            </div>
-          </details>
-        {/if}
         <div class="mb-2 flex flex-wrap items-center gap-2">
           <select class="pii input h-7 w-auto text-xs" bind:value={kitHost} onchange={() => { kit = null; ping = null; }} aria-label="Сайт">
             <option value="">— сайт —</option>
@@ -411,7 +450,6 @@
         {#if ping}
           <p class="mb-2 rounded border px-2 py-1.5 {ping.step === 'ok' ? 'border-up/40 bg-up/10 text-ink' : 'border-warn bg-warn-t text-ink'}">
             <span class="font-semibold">{ping.step === 'ok' ? 'Работает.' : 'Не работает.'}</span> {PING_TEXT[ping.step] ?? ping.step}
-            {#if ping.kit && ping.latest && ping.kit !== ping.latest}<span class="font-semibold text-warn"> На сайте счётчик версии {ping.kit}, свежая — {ping.latest}: перевыложите оба файла (кнопка «Показать код»).</span>{/if}
             {#if ping.target}<span class="pii text-ink-3"> · {ping.target}{ping.status ? ` · ответ ${ping.status}` : ''}{ping.detail ? ` · ${ping.detail}` : ''}</span>{/if}
           </p>
         {/if}

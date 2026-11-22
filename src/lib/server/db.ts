@@ -437,6 +437,39 @@ CREATE TABLE IF NOT EXISTS counter_visitors (
 );
 CREATE INDEX IF NOT EXISTS counter_visitors_at ON counter_visitors(at);
 
+-- Свои визиты и роботы не в статистику (own-visitors.ts, 22.11.2026).
+-- IP своих: зашёл в панель (panel), адрес от браузера (browser), ссылка для
+-- сотрудников (link), вписан руками (manual). По ним панель сама считает код
+-- посетителя (тот же HMAC, что у счётчика сайтов).
+CREATE TABLE IF NOT EXISTS team_ips (
+  ip       TEXT PRIMARY KEY,
+  source   TEXT NOT NULL,
+  first_at INTEGER NOT NULL,
+  last_at  INTEGER NOT NULL
+);
+-- Посетитель (код на один день UTC) узнан своим или роботом: дальше не считается.
+CREATE TABLE IF NOT EXISTS visitor_flags (
+  visitor TEXT PRIMARY KEY,
+  reason  TEXT NOT NULL,
+  at      INTEGER NOT NULL
+);
+-- Что записано в статистику за посетителем — чтобы вычесть, если его узнали
+-- не с первого события. Хранится двое суток.
+CREATE TABLE IF NOT EXISTS visitor_events (
+  visitor TEXT NOT NULL,
+  at      INTEGER NOT NULL,
+  day     TEXT NOT NULL,
+  host    TEXT NOT NULL,
+  what    TEXT NOT NULL,
+  page    TEXT NOT NULL DEFAULT '',
+  kind    TEXT NOT NULL DEFAULT '',
+  label   TEXT NOT NULL DEFAULT '',
+  target  TEXT NOT NULL DEFAULT '',
+  n       INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS visitor_events_visitor ON visitor_events(visitor);
+CREATE INDEX IF NOT EXISTS visitor_events_at ON visitor_events(at);
+
 -- Метка сайта (проект): у всех сайтов на 13.11.2026 — «futcoin», у новых —
 -- своя (решение владелицы 13.11.2026). Видна в «Ключах сайтов», «Группах» и в
 -- ТЗ (CSV). host — домен без www.

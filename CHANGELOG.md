@@ -95,19 +95,21 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
-- **Unified counter, version 3: own visits and robots are not counted.** So
-  bounces, time on site and checkouts are real. Robots are browsers with
-  `navigator.webdriver` (Playwright, Puppeteer, Selenium, headless): the page
-  code flags their events and the site does not forward them; their checkout
-  does not count (no accepted view). Own visits are staff: open any page of a
-  site with `?team=1` and the site remembers the browser for a year (the
-  site's server sets an HttpOnly cookie; the page code still writes nothing in
-  the browser), `?team=0` clears it; their views, time and checkouts are not
-  counted. The counter check shows how many own visits and robots were
-  skipped. The Buttons page lists `?team=1` links for every site, and "Check
-  site" says when a site runs an older version. Names in each site's code stay
-  the same; one field is added. Takes effect on sites whose two counter files
-  are updated to version 3.
+- **Own visits and robots are not counted — the panel decides, the sites'
+  counter stays as installed.** So bounces, time on site and checkouts are
+  real. The panel knows the counter key and computes the visitor code for any
+  IP itself. Own by IP: everyone who opens the panel (IPv4 from the request,
+  IPv6 reported by the browser hourly) and staff who open the "I'm staff" link
+  (no login, secret in the URL, "New link" revokes the old one); IPs can be
+  added and removed by hand and are kept 30 days after the last visit. Own by
+  behaviour: sites in two or more languages other than English on one day.
+  Robots: 10 or more pages within a minute. Their views, clicks, time, visit
+  and bounce and checkouts are not counted; a visitor recognised after the
+  first event has the whole day subtracted. Buttons → "Own visits and robots
+  are not counted" shows the rules, the staff link, own IPs and today's
+  skipped events; the counter check shows them per site. Counter version 3
+  (?team=1 and a webdriver flag on the sites) is withdrawn: sites are not
+  reinstalled.
 - **Map keys: position for the header period, with a comparison.** The map
   site's position, impressions and clicks follow the header period instead of
   a fixed 7 days; a "± позиция" column shows ▲/▼ against the previous window of
