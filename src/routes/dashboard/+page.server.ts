@@ -16,17 +16,21 @@ import { manualPurchases, manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manu
 import { counterOnlyHosts } from '$lib/server/own-sites';
 import { counterDays, type CounterDay } from '$lib/utils/counter-days';
 
-/** Входы на сайт по счётчику: g — из Google, остальные — не из Google и не прямые. */
-type Ext = { g: number; b: number; s: number; ai: number; o: number };
-const noExt = (): Ext => ({ g: 0, b: 0, s: 0, ai: 0, o: 0 });
+/** Входы на сайт по счётчику: g — из Google, b, s, ai, o — не из Google, d — прямые (как колонка «Прямые» на «Кнопках»). */
+type Ext = { g: number; b: number; s: number; ai: number; o: number; d: number };
+const noExt = (): Ext => ({ g: 0, b: 0, s: 0, ai: 0, o: 0, d: 0 });
 function externalVisits(start: string, end: string): Map<string, Ext> {
   const out = new Map<string, Ext>();
   for (const r of clicksForRange(db(), start, end)) {
     if (r.kind !== 'view' || !r.target) continue;
     const src = sourceOf(r.target);
-    if (!src || src.group === 'direct') continue;
+    if (!src) continue;
     const e = out.get(r.host) ?? noExt();
-    if (src.key === 'Google') e.g += r.n;
+    // Прямые заходы (набрали адрес, закладка, мессенджер) — своей колонкой:
+    // раньше их не было вовсе, и у сайта с одними прямыми заходами Dashboard
+    // показывал нули, а «Кнопки» — просмотры (600kcoins.com, 24.11.2026).
+    if (src.group === 'direct') e.d += r.n;
+    else if (src.key === 'Google') e.g += r.n;
     else if (src.key === 'Bing') e.b += r.n;
     else if (src.group === 'search') e.s += r.n;
     else if (src.group === 'ai') e.ai += r.n;

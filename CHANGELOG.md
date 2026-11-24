@@ -95,6 +95,12 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **Dashboard: a "Прямые" (direct) column.** Direct visits from the unified
+  counter (typed address, bookmark, messenger), with the change against the
+  previous period and in the totals row, as in the Buttons page's "Прямые"
+  column. The Dashboard used to take only visits with a source from the
+  counter, so a site with only direct visits showed zeros there and page views
+  on Buttons (600kcoins.com). "Всего не из Google" still excludes them.
 - **Own visits and robots are not counted — the panel decides, the sites'
   counter stays as installed.** So bounces, time on site and checkouts are
   real. The panel knows the counter key and computes the visitor code for any
