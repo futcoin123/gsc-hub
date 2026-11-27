@@ -4,6 +4,7 @@
 import type { Db } from './db';
 import { checkSsl } from './health';
 import { listAllKnownSites } from './google';
+import { counterOnlyHosts } from './own-sites';
 import { siteHostname } from '$lib/utils/url-filters';
 import { getConfigValue } from './config';
 import { mapSettledLimit } from './concurrency';
@@ -324,7 +325,7 @@ export function intervalHours(db: Db): number {
   return (INTERVALS as readonly number[]).includes(v) ? v : 24;
 }
 
-/** Все домены всех консолей (без www). */
+/** Все домены всех консолей (без www) и свои сайты со счётчиком, которых в консолях ещё нет. */
 export async function allHosts(db: Db): Promise<string[]> {
   const { sites } = await listAllKnownSites(db);
   const out = new Set<string>();
@@ -335,6 +336,8 @@ export async function allHosts(db: Db): Promise<string[]> {
       /* битый адрес */
     }
   }
+  // Новый сайт со счётчиком — сразу во всех разделах (просьба владелицы 27.11.2026).
+  for (const h of await counterOnlyHosts(db, out).catch(() => [])) out.add(baseHost(h));
   return [...out].sort();
 }
 

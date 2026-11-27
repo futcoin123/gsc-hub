@@ -12,6 +12,7 @@ import { activeGroupHosts } from '$lib/server/site-groups';
 import { bingConfigured, bingTotals, getBing } from '$lib/server/bing';
 import { counterChecks } from '$lib/server/counter-log';
 import { localToday } from '$lib/server/gsc-calendar';
+import { counterOnlyHosts } from '$lib/server/own-sites';
 import { listTeamIps, rememberTeamIp, removeTeamIp, teamLinkToken, ownSkippedToday, cleanIp } from '$lib/server/own-visitors';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -78,6 +79,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       for (const [h, v] of t.byHost) if (hosts.has(h)) bing[h] = v;
       bingState = 'ok';
     }
+  }
+  // Свои сайты со счётчиком без консоли, даже если событий ещё не было (только
+  // проверка связи): новый сайт — сразу во всех разделах (просьба владелицы 27.11.2026).
+  for (const h of await counterOnlyHosts(db(), hosts).catch(() => [] as string[])) {
+    if (group && !group.has(h)) continue;
+    hosts.add(h);
+    if (!noConsole.includes(h)) noConsole.push(h);
   }
   const mine = (h: string) => hosts.has(h);
   const seen = Object.fromEntries(Object.entries(lastSeen(db())).filter(([h]) => mine(h)));

@@ -6,24 +6,29 @@ import { listSitesForAllAccounts } from '$lib/server/google';
 import { siteHostname } from '$lib/utils/url-filters';
 import { setConfigValue } from '$lib/server/config';
 import { acceptCurrent, allHosts, baseHost, checkHost, history, intervalHours, INTERVALS, listChecks, runDue } from '$lib/server/uptime';
+import { counterOnlyHosts } from '$lib/server/own-sites';
+
+/** Сайты консолей, выбранных в шапке, и свои сайты со счётчиком без консоли. */
+async function shownHosts(): Promise<Set<string>> {
+  const hosts = new Set<string>();
+  const { sites } = await listSitesForAllAccounts(db());
+  for (const s of sites) {
+    try {
+      hosts.add(baseHost(siteHostname(s.siteUrl)));
+    } catch {
+      /* битый адрес */
+    }
+  }
+  for (const h of await counterOnlyHosts(db(), hosts).catch(() => [])) hosts.add(baseHost(h));
+  return hosts;
+}
 import { daysUntil, listDomainDates, refreshDomainDates, refreshDomainDatesInBackground, setManualDates } from '$lib/server/domain-dates';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
   // Сайты консолей, выбранных в шапке (и группы, если выбрана), или ?all=1 — все консоли.
   const all = url.searchParams.get('all') === '1';
-  const hosts = new Set<string>();
-  if (all) for (const h of await allHosts(db())) hosts.add(h);
-  else {
-    const { sites } = await listSitesForAllAccounts(db());
-    for (const s of sites) {
-      try {
-        hosts.add(baseHost(siteHostname(s.siteUrl)));
-      } catch {
-        /* битый адрес */
-      }
-    }
-  }
+  const hosts = all ? new Set(await allHosts(db())) : await shownHosts();
   const checks = listChecks(db()).filter((c) => hosts.has(c.host));
   const hist: Record<string, ReturnType<typeof history>> = {};
   for (const h of hosts) hist[h] = history(db(), h, 20);
@@ -49,8 +54,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
   checkAll: async ({ locals }) => {
     requireAdmin(locals);
-    const { sites } = await listSitesForAllAccounts(db());
-    const hosts = [...new Set(sites.map((s) => { try { return baseHost(siteHostname(s.siteUrl)); } catch { return ''; } }).filter(Boolean))];
+    const hosts = [...(await shownHosts())];
     const n = await runDue(db(), { force: true, hosts });
     return { checked: n };
   },

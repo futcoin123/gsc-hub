@@ -77,6 +77,8 @@
   const openHref = (host: string) => {
     const k = knownByHost.get(host);
     // Через /groups/open: группа становится выбранной в шапке, потом переход на сайт.
+    // Сайт без консоли (только счётчик): Striking нет — ключи и «Свой ключ» на «Ключах сайтов».
+    if (k && !k.sources.length) return null;
     return k ? `/groups/open?g=${group?.id}&site=${encodeURIComponent(k.open.siteUrl)}&acc=${encodeURIComponent(k.open.accountId)}` : null;
   };
   let editorOpen = $state(false);
@@ -579,7 +581,7 @@
                             </tbody>
                           </table>
                         {/if}
-                        {#if knownByHost.get(h)}
+                        {#if knownByHost.get(h)?.sources.length}
                           {@const k = knownByHost.get(h)!}
                           {#key page.data.period?.key}
                           <SiteKeysPanel

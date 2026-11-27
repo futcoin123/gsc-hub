@@ -19,6 +19,8 @@ import { listGroupItems, setGroupFixed, removeGroupItemById, todayGroupName, add
 import { siteHostname } from '$lib/utils/url-filters';
 import { getSiteViewSettings } from '$lib/server/site-view-settings';
 import { seedSiteLabels, siteLabels, labelGeoKeys, autoLabelKnown } from '$lib/server/site-labels';
+import { counterOnlyHosts } from '$lib/server/own-sites';
+import { manualSiteUrl, MANUAL_ACCOUNT } from '$lib/server/manual-sites';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   requireAdmin(locals);
@@ -51,6 +53,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const who = s.accountLabel || s.accountEmail;
     if (!row.accounts.includes(who)) row.accounts.push(who);
     byHost.set(host, row);
+  }
+  // Свои сайты со счётчиком, которых нет в консолях, — тоже можно брать в группу
+  // (просьба владелицы 27.11.2026: новый сайт — сразу во всех разделах).
+  for (const h of await counterOnlyHosts(db(), byHost.keys()).catch(() => [])) {
+    if (byHost.has(h)) continue;
+    byHost.set(h, { host: h, accounts: ['без консоли'], open: { siteUrl: manualSiteUrl(h), accountId: MANUAL_ACCOUNT }, openRank: 0, sources: [] });
   }
   const groups = listSiteGroups(db());
   const wanted = Number(url.searchParams.get('g'));

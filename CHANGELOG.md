@@ -95,6 +95,15 @@ All notable changes to this project are documented here. Format loosely follows
   the period, with quantity and remove controls.
 
 ### Changed
+- **A new site with the counter shows up in every section.** An own site that
+  has sent at least a counter connection check but has no Google console yet
+  is now listed not only on the Dashboard, Sites and Site keys but also in
+  Groups (can be added to a group), Uptime (checked like the others) and
+  Buttons (even before any events). Once a console is connected, Google data
+  follows.
+- **Key map refreshed (47 sites, was 41).** The scheduled map read had been
+  off since 19.11, so sites added to the map later (cheap-fc-coins.com,
+  cheapfccoins.co.uk and four more) showed "нет в карте".
 - **Dashboard: a "Прямые" (direct) column.** Direct visits from the unified
   counter (typed address, bookmark, messenger), with the change against the
   previous period and in the totals row, as in the Buttons page's "Прямые"
